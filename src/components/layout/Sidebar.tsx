@@ -1,33 +1,18 @@
-import { useQueryClient } from '@tanstack/react-query'
 import {
   CheckCircle2,
   LayoutDashboard,
   ListChecks,
   LogOut,
-  RotateCcw,
   UserRound,
   Workflow,
 } from 'lucide-react'
-import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { toast } from 'sonner'
 
 import { UserAvatar } from '@/components/common/UserAvatar'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { InlineSpinner } from '@/components/solutions/StatusBadge'
-import { useCurrentUser, usePaths, usePermissions } from '@/hooks/useSolutionsModule'
+import { useCurrentUser, usePaths } from '@/hooks/useSolutionsModule'
 import { cn } from '@/lib/utils'
-import { db, signOutAndReload, supportsSignIn } from '@/services'
+import { signOutAndReload, supportsSignIn } from '@/services'
 import { ROLE_LABELS } from '@/utils/permissions'
 
 interface SidebarNavProps {
@@ -36,7 +21,7 @@ interface SidebarNavProps {
 }
 
 /**
- * Brand, primary navigation, and the reset action.
+ * Brand, primary navigation, and the signed-in user.
  *
  * Shared by both presentations: the fixed rail on large screens and the slide-in
  * sheet below `lg`. Neither one duplicates the markup.
@@ -44,10 +29,6 @@ interface SidebarNavProps {
 export function SidebarNav({ onNavigate }: SidebarNavProps) {
   const paths = usePaths()
   const currentUser = useCurrentUser()
-  const queryClient = useQueryClient()
-  const { can } = usePermissions()
-  const [confirmingReset, setConfirmingReset] = useState(false)
-  const [resetting, setResetting] = useState(false)
 
   /*
     Nothing here is called plain "Solutions": inside the host CRM this whole rail
@@ -64,30 +45,6 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
     { to: paths.solutions, label: 'Tracker', icon: ListChecks, end: false },
     { to: paths.completed, label: 'Completed', icon: CheckCircle2, end: false },
   ]
-
-  /*
-    Erases every solution, approval, comment, history entry and attachment — for
-    everyone, not just the person clicking, since there is one shared database.
-    It used to fire straight from the button with no confirmation and no
-    permission check, sitting one row below Sign out.
-  */
-  async function eraseAllData() {
-    setResetting(true)
-    try {
-      await db.reset()
-      await queryClient.invalidateQueries()
-      setConfirmingReset(false)
-      toast.success('All data erased', {
-        description: 'Every solution, approval, comment and attachment has been removed.',
-      })
-    } catch (error) {
-      toast.error('Could not erase the data', {
-        description: error instanceof Error ? error.message : 'Unknown error',
-      })
-    } finally {
-      setResetting(false)
-    }
-  }
 
   /** Active item is a filled pill; the rest stay quiet until hovered. */
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -160,50 +117,6 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
         </div>
       )}
 
-      {/*
-        Destructive and irreversible, so it is behind both a permission and a
-        confirmation, and it says what it does. There is no seed dataset to
-        restore any more: this empties the database and leaves it empty.
-      */}
-      {can('solution:delete') && (
-        <div className="shrink-0 border-t border-border p-3">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-3 px-3 font-medium text-muted-foreground hover:bg-red-50 hover:text-red-700"
-            onClick={() => setConfirmingReset(true)}
-          >
-            <RotateCcw className="h-4 w-4 shrink-0" />
-            Erase all data
-          </Button>
-
-          <AlertDialog open={confirmingReset} onOpenChange={setConfirmingReset}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Erase all solution data?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Every solution, approval, comment, history entry and attachment is deleted from
-                  the database, for everyone. Numbering restarts at SOL-001. This cannot be undone
-                  and there is no seed dataset to fall back on. Accounts and sign-ins are kept.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={resetting}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={(event) => {
-                    event.preventDefault() // Keep the dialog up while the wipe runs.
-                    void eraseAllData()
-                  }}
-                  disabled={resetting}
-                  className="bg-red-600 text-white hover:bg-red-700"
-                >
-                  {resetting ? <InlineSpinner /> : null}
-                  Erase everything
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      )}
     </div>
   )
 }
