@@ -10,7 +10,7 @@ const client = new MongoClient(process.env.MONGODB_URI, { serverSelectionTimeout
 await client.connect()
 const db = client.db(process.env.MONGODB_DB)
 
-for (const name of ['solutions', 'approvals', 'comments', 'history', 'attachments', 'uploads.files', 'uploads.chunks', 'meta']) {
+for (const name of ['solutions', 'approvals', 'comments', 'history', 'attachments', 'uploads.files', 'uploads.chunks', 'users', 'sessions', 'meta']) {
   const docs = await db.collection(name).find({}).toArray()
   console.log(`\n${name}: ${docs.length} document(s)`)
   for (const doc of docs.slice(0, 3)) {
@@ -22,6 +22,10 @@ for (const name of ['solutions', 'approvals', 'comments', 'history', 'attachment
       console.log(`  ${doc.userId}: ${doc.message}`)
     } else if (name === 'history') {
       console.log(`  ${doc.action}: ${doc.description}`)
+    } else if (name === 'users') {
+      console.log(`  ${doc.name} <${doc.email}> — ${doc.role}, password ${doc.passwordHash ? 'set' : 'MISSING'}`)
+    } else if (name === 'sessions') {
+      console.log(`  session for ${doc.userId}, expires ${doc.expiresAt?.toISOString?.() ?? doc.expiresAt}`)
     } else if (name === 'uploads.files') {
       console.log(`  ${doc.filename} — ${doc.length} bytes, ${doc.metadata?.contentType ?? doc.contentType ?? '?'}`)
     } else if (name === 'uploads.chunks') {

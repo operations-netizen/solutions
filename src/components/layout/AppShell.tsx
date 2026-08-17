@@ -16,7 +16,17 @@ export function AppShell() {
   const location = useLocation()
 
   return (
-    <div className="min-h-screen bg-background">
+    <div
+      className="min-h-screen bg-background"
+      style={{
+        // Faint enough to be felt rather than seen: it keeps a page of white
+        // cards from reading as cards on paper.
+        backgroundImage:
+          'radial-gradient(50rem 30rem at 100% 0%, hsl(243 75% 51% / 0.05), transparent 60%),' +
+          'radial-gradient(40rem 26rem at 0% 100%, hsl(262 83% 58% / 0.04), transparent 55%)',
+        backgroundAttachment: 'fixed',
+      }}
+    >
       <Sidebar />
       <MobileHeader />
 

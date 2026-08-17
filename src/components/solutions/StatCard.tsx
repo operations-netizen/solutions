@@ -11,6 +11,10 @@ export interface StatCardProps {
   icon: LucideIcon
   /** Tailwind classes for the icon tile: background + icon colour. */
   accent?: string
+  /** Unit shown against the number — "%" or " days" — at a smaller weight. */
+  suffix?: string
+  /** One short line under the label saying what the number counts. */
+  note?: string
   /** Makes the whole card a link into a filtered list. */
   to?: string
   emphasis?: 'default' | 'warning' | 'danger'
@@ -22,13 +26,18 @@ export function StatCard({
   value,
   icon: Icon,
   accent = 'bg-primary/10 text-primary',
+  suffix,
+  note,
   to,
   emphasis = 'default',
   isLoading,
 }: StatCardProps) {
   // Emphasis only earns colour when there is something to look at: a zero
   // overdue count should read as calm, not as a red alert.
-  const active = value > 0
+  /* A count is never "NaN" to a reader — it is zero or it is a bug elsewhere.
+     Rendering 0 keeps a broken upstream sum from becoming visible nonsense. */
+  const count = Number.isFinite(value) ? value : 0
+  const active = count > 0
   const isWarning = emphasis === 'warning' && active
   const isDanger = emphasis === 'danger' && active
 
@@ -61,7 +70,11 @@ export function StatCard({
         ) : (
           // Proportional figures: tabular-nums makes a large value look loose.
           <p className="text-[28px] font-semibold leading-none tracking-tight text-foreground">
-            {value}
+            {count}
+            {/* A unit at full size competes with the figure it qualifies. */}
+            {suffix && (
+              <span className="ml-0.5 text-base font-medium text-muted-foreground">{suffix}</span>
+            )}
           </p>
         )}
       </div>
@@ -70,6 +83,9 @@ export function StatCard({
       <p className="mt-3 whitespace-nowrap text-sm font-semibold leading-snug text-muted-foreground">
         {label}
       </p>
+      {/* The line that stops a bare number being ambiguous — "on time" out of
+          what, "median" of which span. Wraps freely; it is prose, not a label. */}
+      {note && <p className="mt-0.5 text-xs leading-snug text-muted-foreground/80">{note}</p>}
 
       {to && (
         <ArrowUpRight

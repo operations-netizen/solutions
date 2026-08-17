@@ -3,18 +3,19 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardList,
-  Clock,
   Code2,
+  Clock,
   FlaskConical,
   MessagesSquare,
-  Plus,
   Rocket,
+  Plus,
   ShieldCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 
 import { buildStatusClasses, StatusDistribution } from '@/components/charts/StatusDistribution'
 import { PriorityStageHeatmap } from '@/components/charts/PriorityStageHeatmap'
+import { NotificationBell } from '@/components/common/NotificationBell'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SolutionPanel } from '@/components/solutions/SolutionPanel'
 import { CreateSolutionDialog } from '@/components/solutions/SolutionFormDialog'
@@ -24,7 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSolutions, useSolutionStats } from '@/hooks/solutions/useSolutions'
 import { usePaths, usePermissions } from '@/hooks/useSolutionsModule'
-import { DUE_SOON_DAYS } from '@/utils/solution'
+import { DUE_SOON_DAYS, foldToPhases } from '@/utils/solution'
 import { computePriorityStageMatrix } from '@/utils/matrix'
 
 /**
@@ -37,6 +38,8 @@ export function DashboardPage() {
   const [createOpen, setCreateOpen] = useState(false)
 
   const { data: stats, isLoading: statsLoading } = useSolutionStats()
+  /* Gates fold into the phase they are waiting inside; see `foldToPhases`. */
+  const byPhase = stats ? foldToPhases(stats.byStatus) : undefined
   const { data: solutions = [], isLoading } = useSolutions({ sortBy: 'updatedAt', sortDir: 'desc' })
 
   const recent = solutions.slice(0, 5)
@@ -58,15 +61,26 @@ export function DashboardPage() {
       <PageHeader
         title="Solutions Dashboard"
         actions={
-          can('solution:create') && (
-            <Button size="lg" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" />
-              Add Solution
-            </Button>
-          )
+          <>
+            <NotificationBell className="h-10 w-10" />
+            {can('solution:create') && (
+              <Button size="lg" onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Add Solution
+              </Button>
+            )}
+          </>
         }
       />
 
+      {/*
+        Total, then the five phases in workflow order, then the two flags.
+        A phase count includes its approval gate — a solution waiting on
+        Discussion Approval counts under Discussion, because that is the work it
+        is waiting inside. So the five phases sum to Total, while "Pending
+        Approval" and "Overdue" deliberately overlap them: both answer "what
+        needs attention", not "what stage is this in".
+      */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         <StatCard
           label="Total Solutions"
@@ -77,7 +91,7 @@ export function DashboardPage() {
         />
         <StatCard
           label="Discussion"
-          value={stats?.byStatus.DISCUSSION ?? 0}
+          value={byPhase?.DISCUSSION ?? 0}
           icon={MessagesSquare}
           accent="bg-sky-100 text-sky-600"
           to={`${paths.solutions}?tab=DISCUSSION`}
@@ -85,7 +99,7 @@ export function DashboardPage() {
         />
         <StatCard
           label="Development"
-          value={stats?.byStatus.DEVELOPMENT ?? 0}
+          value={byPhase?.DEVELOPMENT ?? 0}
           icon={Code2}
           accent="bg-blue-100 text-blue-600"
           to={`${paths.solutions}?tab=DEVELOPMENT`}
@@ -93,7 +107,7 @@ export function DashboardPage() {
         />
         <StatCard
           label="Testing"
-          value={stats?.byStatus.TESTING ?? 0}
+          value={byPhase?.TESTING ?? 0}
           icon={FlaskConical}
           accent="bg-pink-100 text-pink-600"
           to={`${paths.solutions}?tab=TESTING`}
@@ -101,7 +115,7 @@ export function DashboardPage() {
         />
         <StatCard
           label="Execution"
-          value={stats?.byStatus.EXECUTION ?? 0}
+          value={byPhase?.EXECUTION ?? 0}
           icon={Rocket}
           accent="bg-violet-100 text-violet-600"
           to={`${paths.solutions}?tab=EXECUTION`}

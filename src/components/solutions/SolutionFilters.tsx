@@ -174,16 +174,18 @@ export function SolutionFilters({
             </div>
 
             {!hideStatus && (
-              <FilterRow label="Status">
+              <FilterRow label="Stage">
+                {/* This panel only ever picks one status; a list comes from the
+                    tab strip, which selects a whole phase. */}
                 <Select
-                  value={filters.status ?? 'ALL'}
+                  value={typeof filters.status === 'string' ? filters.status : 'ALL'}
                   onValueChange={(value) => onChange({ status: value as Filters['status'] })}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ALL">All statuses</SelectItem>
+                    <SelectItem value="ALL">All stages</SelectItem>
                     {SOLUTION_STATUSES.map((status) => (
                       <SelectItem key={status} value={status}>
                         {STATUS_META[status].label}

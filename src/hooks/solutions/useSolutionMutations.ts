@@ -18,7 +18,7 @@ import type {
   SolutionWithMeta,
   UpdateSolutionInput,
 } from '@/types/solution'
-import { statusLabel } from '@/utils/workflow'
+import { statusLabel, type ReviveTarget } from '@/utils/workflow'
 import { solutionKeys } from './queryKeys'
 
 /** Anything the user could plausibly have caused gets a readable message. */
@@ -136,26 +136,95 @@ function emitStatusNotification(solution: SolutionWithMeta) {
   })
 }
 
-/** Adds one approver to one gate. The gate's own roster, not the solution's. */
+export function useVoidSolution(solutionId: string) {
+  const { solutions } = useServices()
+  const currentUser = useCurrentUser()
+  const invalidate = useInvalidateSolutions()
+
+  return useMutation({
+    mutationFn: (input: { reason: string }) =>
+      solutions.voidSolution(solutionId, { ...input, actorId: currentUser.id }),
+    onSuccess: (solution) => {
+      invalidate(solution.id)
+      notifications.emit('STATUS_CHANGED', {
+        title: `${solution.solutionNumber} marked not feasible`,
+        description: 'It is out of the pipeline until the void is revoked.',
+        solutionId: solution.id,
+        solutionNumber: solution.solutionNumber,
+      })
+    },
+  })
+}
+
+export function useReviveSolution(solutionId: string) {
+  const { solutions } = useServices()
+  const currentUser = useCurrentUser()
+  const invalidate = useInvalidateSolutions()
+
+  return useMutation({
+    mutationFn: (input: { status: ReviveTarget; dueDate: string }) =>
+      solutions.reviveSolution(solutionId, { ...input, actorId: currentUser.id }),
+    onSuccess: (solution) => {
+      invalidate(solution.id)
+      notifications.emit('STATUS_CHANGED', {
+        title: `${solution.solutionNumber} is back in ${statusLabel(solution.status)}`,
+        description: `Due ${new Date(solution.dueDate).toLocaleDateString()}.`,
+        solutionId: solution.id,
+        solutionNumber: solution.solutionNumber,
+      })
+    },
+  })
+}
+
+/**
+ * Puts one person on the roster — every gate, since the roster is the solution's.
+ * With a `stage`, they are added to that gate alone (the HOBU's override).
+ */
 export function useAddApprover(solutionId: string) {
   const { solutions } = useServices()
   const currentUser = useCurrentUser()
   const invalidate = useInvalidateSolutions()
 
   return useMutation({
-    mutationFn: (input: { approverId: string; stage: ApprovalStage }) =>
+    mutationFn: (input: { approverId: string; stage?: ApprovalStage }) =>
       solutions.addApprover(solutionId, { ...input, actorId: currentUser.id }),
     onSuccess: (solution, variables) => {
       invalidate(solution.id)
       notifications.emit('APPROVAL_REQUESTED', {
         title: 'Approver added',
-        description: `${solution.solutionNumber} now needs a decision on ${statusLabel(
-          variables.stage,
-        )}.`,
+        description: variables.stage
+          ? `${solution.solutionNumber} now needs their decision on ${statusLabel(variables.stage)}.`
+          : `${solution.solutionNumber} now needs their decision at every gate.`,
         solutionId: solution.id,
         solutionNumber: solution.solutionNumber,
       })
     },
+  })
+}
+
+/** Hands one approver's outstanding gates to somebody else, in one step. */
+export function useReplaceApprover(solutionId: string) {
+  const { solutions } = useServices()
+  const currentUser = useCurrentUser()
+  const invalidate = useInvalidateSolutions()
+
+  return useMutation({
+    mutationFn: (input: { fromApproverId: string; toApproverId: string }) =>
+      solutions.replaceApprover(solutionId, { ...input, actorId: currentUser.id }),
+    onSuccess: (solution) => invalidate(solution.id),
+  })
+}
+
+/** Takes one person off the roster. Decisions they already made are kept. */
+export function useRemoveApprover(solutionId: string) {
+  const { solutions } = useServices()
+  const currentUser = useCurrentUser()
+  const invalidate = useInvalidateSolutions()
+
+  return useMutation({
+    mutationFn: (input: { approverId: string }) =>
+      solutions.removeApprover(solutionId, { ...input, actorId: currentUser.id }),
+    onSuccess: (solution) => invalidate(solution.id),
   })
 }
 

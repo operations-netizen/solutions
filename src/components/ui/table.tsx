@@ -11,6 +11,16 @@ const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableE
 )
 Table.displayName = 'Table'
 
+/*
+  Not sticky, though it looks like it should be.
+
+  `position: sticky` needs a scrolling ancestor to stick inside. Here the nearest
+  one is the wrapper above, whose height is content-driven and so never scrolls
+  vertically, and the Card outside it sets `overflow: hidden`. The declaration
+  applied cleanly and did nothing at all. Making a header stay put means giving the
+  table its own bounded scroll area (`max-h-[70vh] overflow-y-auto` on the wrapper)
+  and accepting a scrollbar inside the page — a layout decision, not a style tweak.
+*/
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
   ({ className, ...props }, ref) => (
     <thead ref={ref} className={cn('[&_tr]:border-b', className)} {...props} />

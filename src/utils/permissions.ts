@@ -8,11 +8,19 @@
 import { PERMISSIONS, type CurrentUser, type Permission, type Role, type User } from '@/types/user'
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
-  /** Head of Business Unit — full access, the primary role of this module. */
+  /**
+   * Head of Business Unit — full access, the primary role of this module, and the
+   * only holder of `solution:override`: the overseer can move work that is not
+   * assigned to them, which is how a stalled solution gets unblocked.
+   */
   HOBU: PERMISSIONS,
+  /*
+    Managers run work but do not open it: raising a solution is the HOBU's act, so
+    `solution:create` is theirs alone. A manager still edits, assigns and moves the
+    solutions they are looped into.
+  */
   MANAGER: [
     'solution:view',
-    'solution:create',
     'solution:update',
     'solution:assign',
     'solution:transition',

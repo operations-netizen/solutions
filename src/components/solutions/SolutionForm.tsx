@@ -26,14 +26,26 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useUsers } from '@/hooks/useDirectory'
-import { SOLUTION_PRIORITIES, type NewAttachmentInput } from '@/types/solution'
+import { APPROVAL_STAGES, SOLUTION_PRIORITIES, type NewAttachmentInput } from '@/types/solution'
 import { toDateInputValue } from '@/utils/format'
 import { PRIORITY_META } from '@/utils/solution'
+import { statusLabel } from '@/utils/workflow'
 import {
   buildEditSolutionSchema,
   solutionFormSchema,
   type SolutionFormValues,
 } from '@/utils/validation'
+
+/**
+ * "Discussion, Development, Testing and Execution" — read off the gates rather
+ * than typed out, so adding a gate cannot leave this sentence lying.
+ */
+const GATE_NAMES = (() => {
+  const names = APPROVAL_STAGES.map((stage) => statusLabel(stage).replace(' Approval', ''))
+  return names.length > 1
+    ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+    : names[0]
+})()
 
 export interface SolutionFormSubmitValues extends SolutionFormValues {
   attachments: NewAttachmentInput[]
@@ -83,6 +95,8 @@ export function SolutionForm({
   })
 
   const isSubmitting = form.formState.isSubmitting
+  /** Watched, so the approver list disables the right row as soon as it changes. */
+  const assignedUserId = form.watch('assignedUserId')
 
   async function handleSubmit(values: SolutionFormValues) {
     await onSubmit({ ...values, attachments })
@@ -212,8 +226,12 @@ export function SolutionForm({
                       value={field.value}
                       onChange={field.onChange}
                       invalid={!!fieldState.error}
+                      disabledIds={assignedUserId ? [assignedUserId] : []}
+                      disabledNote="Assigned to this solution"
                     />
-                    <FormDescription>Sign off at both gates: Discussion and Testing.</FormDescription>
+                    {/* Listed from the gates themselves: naming them by hand here
+                        is how this line came to be wrong twice already. */}
+                    <FormDescription>Sign off at every gate: {GATE_NAMES}.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

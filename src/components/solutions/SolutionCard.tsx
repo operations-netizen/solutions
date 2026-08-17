@@ -59,7 +59,10 @@ export function SolutionCard({ solution, className }: SolutionCardProps) {
 
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={solution.status} />
-        {solution.pendingStage && <ApprovalStatusBadge status={solution.approvalStatus} />}
+        {solution.pendingStage && <ApprovalStatusBadge
+            status={solution.approvalStatus}
+            hasApprovers={solution.approvals.length > 0}
+          />}
         <DueDateBadge daysUntilDue={solution.daysUntilDue} isOverdue={solution.isOverdue} />
       </div>
 

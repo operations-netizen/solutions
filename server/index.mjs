@@ -14,14 +14,23 @@
  */
 
 import cors from 'cors'
+import crypto from 'node:crypto'
 import dns from 'node:dns'
 import dotenv from 'dotenv'
 import express from 'express'
 import { GridFSBucket, MongoClient, ObjectId } from 'mongodb'
 
+import directory from '../src/data/directory.json' with { type: 'json' }
+
 dotenv.config()
 
-const { MONGODB_URI, MONGODB_DB = 'hobu_solutions', API_PORT = 4000 } = process.env
+const {
+  MONGODB_URI,
+  MONGODB_DB = 'hobu_solutions',
+  API_PORT = 4000,
+  /** Password given to every seeded user on first run. Change it in .env. */
+  SEED_PASSWORD = 'hobu-demo-2026',
+} = process.env
 
 if (!MONGODB_URI) {
   console.error('MONGODB_URI is missing. Copy .env.example to .env and fill it in.')
@@ -67,8 +76,159 @@ const database = client.db(MONGODB_DB)
  */
 const files = new GridFSBucket(database, { bucketName: 'uploads' })
 const MAX_FILE_BYTES = 25 * 1024 * 1024
+
+/* ------------------------------------------------------------------ */
+/* Authentication                                                      */
+/* ------------------------------------------------------------------ */
+
+/** Sessions last a working week; a longer-lived token is a liability. */
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * scrypt rather than bcrypt so there is no native dependency to build, and it is
+ * what `node:crypto` offers for password hashing. Per-user salt, and the compare
+ * is constant-time — a plain `===` on hashes leaks timing information.
+ */
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex')
+  return { salt, hash }
+}
+
+function passwordMatches(password, record) {
+  if (!record?.passwordSalt || !record?.passwordHash) return false
+  const { hash } = hashPassword(password, record.passwordSalt)
+  const a = Buffer.from(hash, 'hex')
+  const b = Buffer.from(record.passwordHash, 'hex')
+  return a.length === b.length && crypto.timingSafeEqual(a, b)
+}
+
+/** Never let a hash or salt leave the server, even to an authenticated caller. */
+function publicUser(record) {
+  if (!record) return null
+  const { passwordHash, passwordSalt, _id, ...rest } = record
+  return rest
+}
+
+/**
+ * Reconcile the `users` collection with `directory.json` on every start.
+ *
+ * The file is authoritative for *who exists* and for their profile fields:
+ * someone added there gets a login, someone renamed there is renamed, and
+ * someone **removed there loses their account and any live session**. Without
+ * that last part a person dropped from the directory would keep signing in
+ * indefinitely, which is the kind of gap nobody notices until it matters.
+ *
+ * Credentials are the exception: the password hash lives only in the database and
+ * is never written here, so a changed password is never reset to the seed.
+ */
+async function seedUsers() {
+  const users = database.collection('users')
+  const present = new Set(
+    (await users.find({}, { projection: { _id: 1 } }).toArray()).map((row) => row._id),
+  )
+
+  const missing = directory.users.filter((user) => !present.has(user.id))
+  if (missing.length > 0) {
+    await users.insertMany(
+      missing.map((user) => {
+        // A salt per account, so two users sharing the seed password do not
+        // share a hash.
+        const { salt, hash } = hashPassword(SEED_PASSWORD)
+        return { _id: user.id, ...user, passwordSalt: salt, passwordHash: hash }
+      }),
+    )
+    console.log(`Seeded ${missing.length} user(s) with the seed password`)
+  }
+
+  // Profile fields only: `$set` never mentions passwordHash or passwordSalt.
+  const existing = directory.users.filter((user) => present.has(user.id))
+  if (existing.length > 0) {
+    const changes = await users.bulkWrite(
+      existing.map(({ id, ...profile }) => ({
+        updateOne: { filter: { _id: id }, update: { $set: profile } },
+      })),
+    )
+    if (changes.modifiedCount > 0) {
+      console.log(`Updated ${changes.modifiedCount} user profile(s) from directory.json`)
+    }
+  }
+
+  /*
+    Anyone in the collection but not in the file is removed, along with their
+    sessions so the revocation is immediate rather than lasting until expiry.
+  */
+  const allowed = new Set(directory.users.map((user) => user.id))
+  const strays = [...present].filter((id) => !allowed.has(id))
+
+  if (strays.length > 0) {
+    // Solutions reference users by id, so say plainly what will dangle.
+    const referenced = await database.collection('solutions').countDocuments({
+      $or: [{ assignedUserId: { $in: strays } }, { createdBy: { $in: strays } }],
+    })
+
+    await database.collection('users').deleteMany({ _id: { $in: strays } })
+    const { deletedCount } = await database
+      .collection('sessions')
+      .deleteMany({ userId: { $in: strays } })
+
+    console.warn(
+      `Removed ${strays.length} user(s) absent from directory.json: ${strays.join(', ')}` +
+        ` (${deletedCount} session(s) revoked)`,
+    )
+    if (referenced > 0) {
+      console.warn(
+        `  ${referenced} solution(s) still reference a removed user by id; ` +
+          'their name will render as the raw id.',
+      )
+    }
+  }
+
+  /*
+    Expired sessions are only dropped when someone tries to use one, so they
+    otherwise sit in the collection for a week. Sweeping them on start keeps the
+    session list a list of who is actually signed in.
+  */
+  const { deletedCount: expired } = await database
+    .collection('sessions')
+    .deleteMany({ expiresAt: { $lt: new Date() } })
+  if (expired > 0) console.log(`Swept ${expired} expired session(s)`)
+
+  const total = present.size + missing.length - strays.length
+  console.log(`Directory: ${total} users`)
+  return total
+}
+
+/** Resolves the bearer token to a user, or null. Expired sessions are dropped. */
+async function userForRequest(req) {
+  const header = req.get('authorization') ?? ''
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null
+  if (!token) return null
+
+  const session = await database.collection('sessions').findOne({ _id: token })
+  if (!session) return null
+
+  if (new Date(session.expiresAt).getTime() < Date.now()) {
+    await database.collection('sessions').deleteOne({ _id: token })
+    return null
+  }
+
+  return publicUser(await database.collection('users').findOne({ _id: session.userId }))
+}
+
+/** Express middleware: 401 unless the request carries a live session. */
+async function requireSession(req, res, next) {
+  try {
+    const user = await userForRequest(req)
+    if (!user) return res.status(401).json({ error: 'Not signed in' })
+    req.user = user
+    next()
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+}
 await database.command({ ping: 1 })
 console.log(`Connected to MongoDB database "${MONGODB_DB}"`)
+await seedUsers()
 
 /** Documents carry their own `id`; Mongo's `_id` is never sent to the client. */
 const WITHOUT_MONGO_ID = { projection: { _id: 0 } }
@@ -101,7 +261,70 @@ app.get('/api/health', async (_req, res) => {
   }
 })
 
-app.get('/api/snapshot', async (_req, res) => {
+
+/* ------------------------------------------------------------------ */
+/* Auth routes                                                         */
+/* ------------------------------------------------------------------ */
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body ?? {}
+  if (typeof email !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Email and password are required.' })
+  }
+
+  try {
+    const record = await database
+      .collection('users')
+      .findOne({ email: email.trim().toLowerCase() })
+
+    /*
+      One message for "no such user" and "wrong password" both: distinguishing
+      them tells an attacker which addresses are real.
+    */
+    if (!record || !passwordMatches(password, record)) {
+      return res.status(401).json({ error: 'Those credentials do not match an account.' })
+    }
+
+    const token = crypto.randomBytes(32).toString('hex')
+    await database.collection('sessions').insertOne({
+      _id: token,
+      userId: record._id,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+    })
+
+    res.json({ token, user: publicUser(record) })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.get('/api/auth/session', requireSession, (req, res) => {
+  res.json({ user: req.user })
+})
+
+app.post('/api/auth/logout', async (req, res) => {
+  const header = req.get('authorization') ?? ''
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null
+  // Signing out is idempotent: an unknown token is already signed out.
+  if (token) await database.collection('sessions').deleteOne({ _id: token }).catch(() => {})
+  res.status(204).end()
+})
+
+/** The directory, from the database rather than the frontend bundle. */
+app.get('/api/users', requireSession, async (_req, res) => {
+  try {
+    const users = await database.collection('users').find({}).toArray()
+    res.json({
+      users: users.map(publicUser).sort((a, b) => a.name.localeCompare(b.name)),
+      teams: directory.teams,
+    })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.get('/api/snapshot', requireSession, async (_req, res) => {
   try {
     res.json(await readSnapshot())
   } catch (error) {
@@ -116,7 +339,7 @@ app.get('/api/snapshot', async (_req, res) => {
  * between, so the write is refused with 409 and the current snapshot. The client
  * refetches and replays its change rather than silently clobbering.
  */
-app.put('/api/snapshot', async (req, res) => {
+app.put('/api/snapshot', requireSession, async (req, res) => {
   const { version, tables } = req.body ?? {}
 
   if (typeof version !== 'number' || !tables) {
@@ -157,7 +380,7 @@ app.put('/api/snapshot', async (req, res) => {
  * needed for a single-file upload, and the request streams straight into GridFS
  * instead of being buffered whole.
  */
-app.post('/api/files', (req, res) => {
+app.post('/api/files', requireSession, (req, res) => {
   const fileName = decodeURIComponent(req.get('x-file-name') ?? 'upload')
   const contentType = req.get('content-type') ?? 'application/octet-stream'
 
@@ -203,6 +426,12 @@ app.post('/api/files', (req, res) => {
   req.pipe(upload)
 })
 
+/*
+  Deliberately not behind `requireSession`: this URL is used as a plain `<a href>`
+  download, which cannot carry an Authorization header. The id is an unguessable
+  ObjectId, so it is a capability URL — good enough for attachments here, but a
+  deployment holding sensitive files wants signed, expiring links instead.
+*/
 /** Streams a stored file back, named so the browser saves it correctly. */
 app.get('/api/files/:id', async (req, res) => {
   let id
@@ -235,7 +464,7 @@ app.get('/api/files/:id', async (req, res) => {
 })
 
 /** Called when an attachment row is deleted, so the bytes do not outlive it. */
-app.delete('/api/files/:id', async (req, res) => {
+app.delete('/api/files/:id', requireSession, async (req, res) => {
   try {
     await files.delete(new ObjectId(req.params.id))
     res.status(204).end()
@@ -246,8 +475,12 @@ app.delete('/api/files/:id', async (req, res) => {
   }
 })
 
-/** Wipe everything — what the "Reset demo data" button calls. */
-app.post('/api/reset', async (_req, res) => {
+/**
+ * Wipe the solution data — what the "Reset demo data" button calls.
+ * Users and sessions are not touched: resetting the demo must not sign you out
+ * or delete the accounts you log in with.
+ */
+app.post('/api/reset', requireSession, async (_req, res) => {
   try {
     await Promise.all(TABLES.map((name) => database.collection(name).deleteMany({})))
     // Drop the file bytes as well; metadata alone would leave orphaned chunks.

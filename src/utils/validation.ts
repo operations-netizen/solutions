@@ -75,6 +75,17 @@ export const rejectionSchema = z.object({
 
 export type RejectionFormValues = z.infer<typeof rejectionSchema>
 
+/**
+ * Voiding needs the same standard of explanation as rejecting: both take work off
+ * the board, and "not feasible" is worthless to whoever reads it later without
+ * the reason why.
+ */
+export const voidSchema = z.object({
+  reason: requiredText('Reason', 5, 1000),
+})
+
+export type VoidFormValues = z.infer<typeof voidSchema>
+
 export const approvalSchema = z.object({
   comment: z.string().trim().max(1000, 'Comment must be 1000 characters or fewer.').optional(),
 })

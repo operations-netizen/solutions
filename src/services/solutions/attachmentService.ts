@@ -11,6 +11,7 @@
  */
 
 import type { ActorContext, AttachmentService } from '@/services/contracts'
+import { authHeaders } from '@/services/auth/session'
 import { apiBaseUrl, db, isRemoteStore } from '@/services/db'
 import type { Attachment, NewAttachmentInput } from '@/types/solution'
 import { createId } from '@/utils/id'
@@ -53,6 +54,7 @@ export async function toAttachmentInput(file: File): Promise<NewAttachmentInput>
       'Content-Type': mimeType,
       // Header values must be latin-1; a name with accents or CJK would throw.
       'X-File-Name': encodeURIComponent(file.name),
+      ...authHeaders(),
     },
     body: file,
   })
@@ -155,7 +157,10 @@ export const attachmentService: AttachmentService = {
     // bytes, and a failure here must not undo a removal the user has seen.
     if (isRemoteStore && stored?.fileUrl.startsWith(STORED_PREFIX)) {
       const fileId = stored.fileUrl.slice(STORED_PREFIX.length)
-      await fetch(`${apiBaseUrl}/api/files/${fileId}`, { method: 'DELETE' }).catch(() => {})
+      await fetch(`${apiBaseUrl}/api/files/${fileId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      }).catch(() => {})
     }
   },
 }

@@ -2,6 +2,7 @@ import { AlertTriangle, ClipboardList, FileQuestion, PenLine, ShieldCheck } from
 import { useMemo, useState } from 'react'
 
 import { EmptyState } from '@/components/common/EmptyState'
+import { NotificationBell } from '@/components/common/NotificationBell'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SolutionFilters } from '@/components/solutions/SolutionFilters'
 import { SolutionTable } from '@/components/solutions/SolutionTable'
@@ -134,6 +135,7 @@ export function MySolutionsPage() {
       <PageHeader
         title="My Solutions"
         description="Everything you own, are assigned, or have to sign off — in one list."
+        actions={<NotificationBell />}
       />
 
       {/*
@@ -142,6 +144,16 @@ export function MySolutionsPage() {
         the rows behind it.
       */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {/* Ordered the way the tabs below are, and the way the work reaches you:
+            your own queue first, then what you raised, then what is waiting on
+            your signature, then what has slipped. */}
+        <StatCard
+          label="Assigned to you"
+          value={counts.ASSIGNED}
+          icon={ClipboardList}
+          isLoading={isLoading}
+        />
+        <StatCard label="Raised by you" value={counts.RAISED} icon={PenLine} isLoading={isLoading} />
         <StatCard
           label="Awaiting your approval"
           value={counts.APPROVAL}
@@ -150,13 +162,6 @@ export function MySolutionsPage() {
           emphasis="warning"
           isLoading={isLoading}
         />
-        <StatCard
-          label="Assigned to you"
-          value={counts.ASSIGNED}
-          icon={ClipboardList}
-          isLoading={isLoading}
-        />
-        <StatCard label="Raised by you" value={counts.RAISED} icon={PenLine} isLoading={isLoading} />
         <StatCard
           label="Your overdue"
           value={counts.OVERDUE}
@@ -190,8 +195,11 @@ export function MySolutionsPage() {
         onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))}
         onReset={() => setFilters(EMPTY_FILTERS)}
         hideStatus
-        // Every row here is already scoped to one person by the tab strip.
-        hideAssignee
+        /*
+          The assignee filter belongs here after all: "All" and "Raised by me"
+          include work assigned to other people, so narrowing by who holds it is
+          a real question on this page.
+        */
         sort={sort}
         onSortChange={handleSort}
       />

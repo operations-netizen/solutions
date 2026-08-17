@@ -2,13 +2,13 @@ import { Check, Circle, X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import {
-  SOLUTION_STATUSES,
+  PIPELINE_STATUSES,
   type Approval,
   type History,
   type SolutionStatus,
 } from '@/types/solution'
 import { formatDateTime } from '@/utils/format'
-import { statusIndex, STATUS_META } from '@/utils/workflow'
+import { isClosed, isVoid, statusIndex, STATUS_META } from '@/utils/workflow'
 
 type StepState = 'completed' | 'current' | 'pending' | 'rejected'
 
@@ -33,7 +33,17 @@ export function WorkflowTracker({
   orientation = 'vertical',
   className,
 }: WorkflowTrackerProps) {
-  const currentIndex = statusIndex(status)
+  /*
+    A voided solution has no pipeline position — `statusIndex` returns -1 — so the
+    furthest stage it actually reached is recovered from the history instead.
+    Otherwise the tracker would claim nothing had ever started, which is wrong for
+    work that was called off at, say, the Discussion gate.
+  */
+  const voided = isVoid(status)
+  const reached = history
+    .map((entry) => statusIndex(entry.toStatus ?? 'DISCUSSION'))
+    .reduce((max, index) => (index > max ? index : max), -1)
+  const currentIndex = voided ? reached : statusIndex(status)
 
   /**
    * A gate counts as rejected while the solution sits at or before it with a
@@ -46,11 +56,16 @@ export function WorkflowTracker({
       .map((a) => a.stage as SolutionStatus),
   )
 
-  const steps = SOLUTION_STATUSES.map((step, index) => {
+  const steps = PIPELINE_STATUSES.map((step, index) => {
     let state: StepState = 'pending'
     if (rejectedStages.has(step)) state = 'rejected'
     else if (index < currentIndex) state = 'completed'
-    else if (index === currentIndex) state = 'current'
+    /*
+      The step a closed solution sits on is done, not in progress: arriving at
+      Completed *is* the finish, and a voided solution's pipeline is not running
+      either. Only live work has a current step.
+    */
+    else if (index === currentIndex) state = isClosed(status) ? 'completed' : 'current'
 
     // Most recent time the solution entered this step.
     const entered = history.filter((h) => h.toStatus === step).at(-1)
@@ -60,7 +75,7 @@ export function WorkflowTracker({
 
   if (orientation === 'horizontal') {
     return (
-      <ol className={cn('flex w-full items-center', className)}>
+      <ol className={cn('flex w-full items-center', voided && 'opacity-60', className)}>
         {steps.map(({ step, state }, index) => (
           <li key={step} className={cn('flex items-center', index < steps.length - 1 && 'flex-1')}>
             <div className="flex flex-col items-center gap-1.5">
@@ -91,7 +106,7 @@ export function WorkflowTracker({
   }
 
   return (
-    <ol className={cn('relative space-y-0', className)}>
+    <ol className={cn('relative space-y-0', voided && 'opacity-60', className)}>
       {steps.map(({ step, state, enteredAt }, index) => {
         const isLast = index === steps.length - 1
         const meta = STATUS_META[step]

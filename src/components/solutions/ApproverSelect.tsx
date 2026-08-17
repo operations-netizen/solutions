@@ -12,8 +12,14 @@ interface ApproverSelectProps {
   onChange: (value: string[]) => void
   disabled?: boolean
   invalid?: boolean
-  /** Exclude a user (typically the assignee) from the list. */
-  excludeIds?: string[]
+  /**
+   * Users who may not be picked — the assignee, in practice. They stay visible
+   * but unselectable: hiding them makes the list look wrong ("where is John?")
+   * whereas a greyed row with a reason answers the question.
+   */
+  disabledIds?: string[]
+  /** Why those users are unselectable, shown on their row. */
+  disabledNote?: string
 }
 
 /**
@@ -25,10 +31,10 @@ export function ApproverSelect({
   onChange,
   disabled,
   invalid,
-  excludeIds = [],
+  disabledIds = [],
+  disabledNote,
 }: ApproverSelectProps) {
   const { data: users = [] } = useUsers()
-  const available = users.filter((user) => !excludeIds.includes(user.id))
   const selected = users.filter((user) => value.includes(user.id))
 
   function toggle(userId: string) {
@@ -63,24 +69,43 @@ export function ApproverSelect({
 
         <PopoverContent className="w-[min(22rem,calc(100vw-2rem))] p-1.5" align="start">
           <div className="max-h-72 overflow-y-auto overscroll-contain">
-            {available.map((user) => {
+            {users.map((user) => {
               const checked = value.includes(user.id)
+              const blocked = disabledIds.includes(user.id)
+
               return (
                 <button
                   key={user.id}
                   type="button"
+                  disabled={blocked}
                   onClick={() => toggle(user.id)}
-                  className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent"
+                  title={blocked ? disabledNote : undefined}
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors',
+                    blocked ? 'cursor-not-allowed opacity-50' : 'hover:bg-accent',
+                  )}
                 >
-                  <Checkbox checked={checked} tabIndex={-1} className="pointer-events-none" />
+                  <Checkbox
+                    checked={checked}
+                    disabled={blocked}
+                    tabIndex={-1}
+                    className="pointer-events-none"
+                  />
                   <UserAvatar user={user} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{user.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {user.title} · {user.team}
+                    {/* Same identity line as the assignee picker, so the two
+                        lists in this form read as one directory. */}
+                    <p
+                      className={cn(
+                        'truncate text-xs text-muted-foreground',
+                        !(blocked && disabledNote) && 'font-mono',
+                      )}
+                    >
+                      {blocked && disabledNote ? disabledNote : user.email}
                     </p>
                   </div>
-                  {checked && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                  {checked && !blocked && <Check className="h-4 w-4 shrink-0 text-primary" />}
                 </button>
               )
             })}

@@ -12,25 +12,42 @@
 /* ------------------------------------------------------------------ */
 
 /**
- * The workflow states a solution can occupy.
- *
- * Order matters: the array below is also the visual order of the workflow
- * tracker and the basis for progress calculations.
+ * The linear pipeline, in order. This order *is* the workflow tracker and the
+ * basis for progress, so nothing may be inserted without meaning it.
  */
-export const SOLUTION_STATUSES = [
+export const PIPELINE_STATUSES = [
   'DISCUSSION',
   'DISCUSSION_APPROVAL',
   'DEVELOPMENT',
+  'DEVELOPMENT_APPROVAL',
   'TESTING',
   'TESTING_APPROVAL',
   'EXECUTION',
+  'EXECUTION_APPROVAL',
   'COMPLETED',
 ] as const
+
+export type PipelineStatus = (typeof PIPELINE_STATUSES)[number]
+
+/**
+ * Every state a solution can occupy.
+ *
+ * `VOID` is deliberately outside the pipeline: it is not a later stage of the
+ * work, it is the work being called off as not feasible. It therefore has no
+ * position, no progress, and no column in the load charts — and it is reversible,
+ * unlike `COMPLETED`.
+ */
+export const SOLUTION_STATUSES = [...PIPELINE_STATUSES, 'VOID'] as const
 
 export type SolutionStatus = (typeof SOLUTION_STATUSES)[number]
 
 /** The two approval gates in the workflow. */
-export const APPROVAL_STAGES = ['DISCUSSION_APPROVAL', 'TESTING_APPROVAL'] as const
+export const APPROVAL_STAGES = [
+  'DISCUSSION_APPROVAL',
+  'DEVELOPMENT_APPROVAL',
+  'TESTING_APPROVAL',
+  'EXECUTION_APPROVAL',
+] as const
 export type ApprovalStage = (typeof APPROVAL_STAGES)[number]
 
 export const SOLUTION_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const
@@ -55,6 +72,8 @@ export const HISTORY_ACTIONS = [
   'DUE_DATE_CHANGED',
   'PRIORITY_CHANGED',
   'APPROVER_ADDED',
+  'APPROVER_REMOVED',
+  'APPROVER_REPLACED',
   'APPROVAL_REQUESTED',
   'APPROVED',
   'REJECTED',
@@ -62,6 +81,8 @@ export const HISTORY_ACTIONS = [
   'COMMENT_ADDED',
   'ATTACHMENT_UPLOADED',
   'COMPLETED',
+  'VOIDED',
+  'REVIVED',
 ] as const
 
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number]
@@ -216,13 +237,20 @@ export type UpdateSolutionInput = Partial<
 export interface SolutionFilters {
   /** Matches title, solution number, or assignee name. */
   search?: string
-  status?: SolutionStatus | 'ALL'
+  /** A single status, a list of them (used to select a whole phase), or `ALL`. */
+  status?: SolutionStatus | SolutionStatus[] | 'ALL'
   priority?: SolutionPriority | 'ALL'
   assignedUserId?: string | 'ALL'
   approvalStatus?: ApprovalStatus | 'ALL'
   /** Inclusive ISO date bounds on `dueDate`. */
   dueFrom?: IsoDateString
   dueTo?: IsoDateString
+  /**
+   * Restrict to solutions this person is looped into — assignee, raiser, or on the
+   * approver roster. Set by the read hooks for anybody without `solution:viewAll`,
+   * so a list and its counts show the same work the detail page will open.
+   */
+  participantId?: string
   /** Convenience buckets used by the status tabs. */
   bucket?: 'ALL' | 'PENDING_APPROVAL' | 'OVERDUE' | 'ACTIVE'
   sortBy?: SolutionSortKey
@@ -234,6 +262,8 @@ export const SOLUTION_SORT_KEYS = [
   'createdAt',
   'dueDate',
   'priority',
+  'assignee',
+  'raiser',
   'solutionNumber',
   'title',
 ] as const

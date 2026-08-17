@@ -12,6 +12,7 @@
  */
 
 import type { DatabaseSnapshot } from '@/data/mockSolutions'
+import { authHeaders } from '@/services/auth/session'
 import type { TableName } from './localDatabase'
 
 const EMPTY: DatabaseSnapshot = {
@@ -48,8 +49,17 @@ export function createRemoteDatabase(baseUrl: string) {
 
   async function request(path: string, init?: RequestInit): Promise<Response> {
     try {
-      return await fetch(`${root}${path}`, init)
-    } catch {
+      // Every store call carries the session: the data routes require one.
+      const response = await fetch(`${root}${path}`, {
+        ...init,
+        headers: { ...(init?.headers ?? {}), ...authHeaders() },
+      })
+      if (response.status === 401) {
+        throw new RemoteDatabaseError('Your session has expired. Please sign in again.')
+      }
+      return response
+    } catch (error) {
+      if (error instanceof RemoteDatabaseError) throw error
       throw new RemoteDatabaseError(
         `Cannot reach the API server at ${root}. Start it with \`npm run dev:api\`.`,
       )

@@ -1,7 +1,8 @@
-import { CheckCircle2, Clock, Trophy } from 'lucide-react'
+import { CheckCircle2, Clock, Timer, Trophy } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { EmptyState } from '@/components/common/EmptyState'
+import { NotificationBell } from '@/components/common/NotificationBell'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SolutionFilters } from '@/components/solutions/SolutionFilters'
 import { SolutionTable } from '@/components/solutions/SolutionTable'
@@ -49,6 +50,25 @@ export function CompletedSolutionsPage() {
     (s) => s.completedAt !== null && s.completedAt <= s.dueDate,
   ).length
   const late = solutions.length - onTime
+  /*
+    Two derived figures, because a count of delivered work says nothing about how
+    the delivery went. The rate is what a reader compares between months, and the
+    median beats the mean here: one solution that sat open for a year would drag an
+    average until it described nothing.
+  */
+  const onTimeRate = solutions.length === 0 ? 0 : Math.round((onTime / solutions.length) * 100)
+  const cycleDays = solutions
+    .filter((s) => s.completedAt !== null)
+    .map((s) => (new Date(s.completedAt as string).getTime() - new Date(s.createdAt).getTime()) / 86_400_000)
+    .sort((a, z) => a - z)
+  const medianCycle =
+    cycleDays.length === 0
+      ? null
+      : Math.round(
+          cycleDays.length % 2 === 1
+            ? cycleDays[(cycleDays.length - 1) / 2]
+            : (cycleDays[cycleDays.length / 2 - 1] + cycleDays[cycleDays.length / 2]) / 2,
+        )
 
   function handleSort(key: SolutionSortKey) {
     setSort((current) =>
@@ -62,31 +82,51 @@ export function CompletedSolutionsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Completed Solutions"
-        description="Delivered work, kept as a read-only record with its full workflow history."
+        description="Delivered work, with the full history of how it got there."
+        actions={<NotificationBell />}
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/*
+        Four tiles rather than three, and the two new ones are the ones worth
+        reading: a delivery record is judged on hit rate and how long things take,
+        not on how many rows there are. Each count carries the sentence that makes
+        it mean something.
+      */}
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
-          label="Completed solutions"
+          label="Delivered"
           value={solutions.length}
           icon={Trophy}
           accent="bg-emerald-100 text-emerald-600"
           isLoading={isLoading}
+          note="reached the final gate"
         />
         <StatCard
-          label="Closed on time"
-          value={onTime}
+          label="On time"
+          value={onTimeRate}
+          suffix="%"
           icon={CheckCircle2}
           accent="bg-emerald-100 text-emerald-600"
           isLoading={isLoading}
+          note={`${onTime} of ${solutions.length} by the due date`}
         />
         <StatCard
-          label="Closed after due date"
+          label="Median cycle time"
+          value={medianCycle ?? 0}
+          suffix={medianCycle === 1 ? ' day' : ' days'}
+          icon={Timer}
+          accent="bg-indigo-100 text-indigo-600"
+          isLoading={isLoading}
+          note="raised to completed"
+        />
+        <StatCard
+          label="Closed late"
           value={late}
           icon={Clock}
           accent="bg-amber-100 text-amber-600"
           emphasis="warning"
           isLoading={isLoading}
+          note={late === 0 ? 'nothing overran' : 'past the due date'}
         />
       </div>
 

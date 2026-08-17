@@ -12,7 +12,8 @@
  */
 
 import {
-  SOLUTION_STATUSES,
+  APPROVAL_STAGES,
+  PIPELINE_STATUSES,
   type Approval,
   type ApprovalStage,
   type Attachment,
@@ -22,7 +23,12 @@ import {
   type SolutionPriority,
   type SolutionStatus,
 } from '@/types/solution'
-import { isApprovalGate, statusIndex, statusLabel } from '@/utils/workflow'
+import {
+  getRejectionTarget,
+  isApprovalGate,
+  statusIndex,
+  statusLabel,
+} from '@/utils/workflow'
 
 export interface DatabaseSnapshot {
   solutions: Solution[]
@@ -101,10 +107,14 @@ const STAGE_WEIGHTS: Record<SolutionStatus, number> = {
   DISCUSSION: 1.6,
   DISCUSSION_APPROVAL: 0.7,
   DEVELOPMENT: 3.6,
+  DEVELOPMENT_APPROVAL: 0.6,
   TESTING: 1.6,
   TESTING_APPROVAL: 0.5,
   EXECUTION: 1.1,
+  EXECUTION_APPROVAL: 0.5,
   COMPLETED: 1.5,
+  // Never on a seeded path: a solution is voided by hand, not grown into it.
+  VOID: 0,
 }
 
 /**
@@ -112,7 +122,7 @@ const STAGE_WEIGHTS: Record<SolutionStatus, number> = {
  * The happy path is exactly the declared status order.
  */
 function pathTo(status: SolutionStatus): SolutionStatus[] {
-  return SOLUTION_STATUSES.slice(0, statusIndex(status) + 1)
+  return PIPELINE_STATUSES.slice(0, statusIndex(status) + 1)
 }
 
 interface Builder {
@@ -168,7 +178,7 @@ function buildSolution(seed: SolutionSeed, index: number, out: Builder): Solutio
       performedBy: HOBU_ID,
       createdAt: iso(createdAt + (approverIndex + 1) * 60_000),
     })
-    for (const stage of ['DISCUSSION_APPROVAL', 'TESTING_APPROVAL'] as ApprovalStage[]) {
+    for (const stage of APPROVAL_STAGES) {
       out.approvals.push({
         id: `apr-${solutionId}-${stage}-${approverId}`,
         solutionId,
@@ -196,7 +206,7 @@ function buildSolution(seed: SolutionSeed, index: number, out: Builder): Solutio
         action: 'APPROVAL_REQUESTED',
         fromStatus: from,
         toStatus: to,
-        description: `Sent for ${to === 'DISCUSSION_APPROVAL' ? 'discussion' : 'testing'} approval`,
+        description: `Sent for ${statusLabel(to).toLowerCase()}`,
         performedBy: HOBU_ID,
         createdAt: iso(at),
       })
@@ -209,14 +219,14 @@ function buildSolution(seed: SolutionSeed, index: number, out: Builder): Solutio
         pushHistory({
           action: 'REJECTED',
           fromStatus: to,
-          toStatus: to === 'DISCUSSION_APPROVAL' ? 'DISCUSSION' : 'DEVELOPMENT',
+          toStatus: getRejectionTarget(to),
           description: `Rejected by ${rejector}: ${seed.rejectionReason ?? 'Rework required.'}`,
           performedBy: rejector,
           createdAt: iso(at + stageSpan(step) * 0.3),
         })
         pushHistory({
           action: 'APPROVAL_REQUESTED',
-          fromStatus: to === 'DISCUSSION_APPROVAL' ? 'DISCUSSION' : 'DEVELOPMENT',
+          fromStatus: getRejectionTarget(to),
           toStatus: to,
           description: 'Resubmitted for approval after rework',
           performedBy: HOBU_ID,

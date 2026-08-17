@@ -19,7 +19,13 @@ import type {
 } from '@/types/solution'
 import type { User } from '@/types/user'
 import { daysFromToday } from './format'
-import { isApprovalGate, statusProgress } from './workflow'
+import {
+  isApprovalGate,
+  PHASE_STATUSES,
+  SOLUTION_PHASES,
+  statusProgress,
+  type SolutionPhase,
+} from './workflow'
 
 /** A solution is flagged "due soon" this many days before its due date. */
 export const DUE_SOON_DAYS = 7
@@ -63,9 +69,21 @@ export const PRIORITY_META: Record<SolutionPriority, PriorityMeta> = {
   },
 }
 
+/**
+ * `NOT_REQUIRED` keeps its name in the domain — it is the absence of a decision —
+ * but reads as "No decision yet" wherever it is shown, because in this workflow
+ * nearly every solution does eventually need one. `ApprovalStatusBadge` narrows
+ * it further to "Not yet" when approvers are already on the roster.
+ */
 export const APPROVAL_STATUS_META: Record<ApprovalStatus, { label: string; badgeClass: string }> = {
-  NOT_REQUIRED: { label: 'Not required', badgeClass: 'bg-slate-100 text-slate-500 ring-slate-200' },
-  PENDING: { label: 'Pending', badgeClass: 'bg-amber-100 text-amber-800 ring-amber-200' },
+  NOT_REQUIRED: {
+    label: 'No decision yet',
+    badgeClass: 'bg-slate-100 text-slate-500 ring-slate-200',
+  },
+  PENDING: {
+    label: 'Waiting for approval',
+    badgeClass: 'bg-amber-100 text-amber-800 ring-amber-200',
+  },
   APPROVED: { label: 'Approved', badgeClass: 'bg-emerald-100 text-emerald-700 ring-emerald-200' },
   REJECTED: { label: 'Rejected', badgeClass: 'bg-red-100 text-red-700 ring-red-200' },
 }
@@ -180,19 +198,29 @@ export const SORT_LABELS: Record<SolutionSortKey, string> = {
   createdAt: 'Date created',
   dueDate: 'Due date',
   priority: 'Priority',
+  assignee: 'Assigned to',
+  raiser: 'Assigned by',
   solutionNumber: 'Solution ID',
   title: 'Title',
 }
 
 /** The status tabs on the Solutions page. */
+/*
+  The four phases run in workflow order, then the two cross-cutting tabs.
+
+  "Pending Approval" is not a stage — it selects whatever is sitting at a gate,
+  wherever that gate is — so it sat oddly between Discussion and Development,
+  reading like a step between them. It belongs after the stages it cuts across.
+*/
 export const STATUS_TABS = [
   { key: 'ALL', label: 'All' },
   { key: 'DISCUSSION', label: 'Discussion' },
-  { key: 'PENDING_APPROVAL', label: 'Pending Approval' },
   { key: 'DEVELOPMENT', label: 'Development' },
   { key: 'TESTING', label: 'Testing' },
   { key: 'EXECUTION', label: 'Execution' },
+  { key: 'PENDING_APPROVAL', label: 'Pending Approval' },
   { key: 'COMPLETED', label: 'Completed' },
+  { key: 'VOID', label: 'Void' },
 ] as const
 
 export type StatusTabKey = (typeof STATUS_TABS)[number]['key']
@@ -230,6 +258,21 @@ function matchesBucket(solution: SolutionWithMeta, bucket: SolutionFilters['buck
   }
 }
 
+/**
+ * Whether somebody is looped into a solution.
+ *
+ * Three ways in: it is assigned to them, they raised it, or they are on its
+ * approver roster. Commenting on one does not count — being asked a question is
+ * not the same as being given the work.
+ */
+export function isParticipant(solution: SolutionWithMeta, userId: string): boolean {
+  return (
+    solution.assignedUserId === userId ||
+    solution.createdBy === userId ||
+    solution.approvals.some((approval) => approval.approverId === userId)
+  )
+}
+
 export function filterSolutions(
   solutions: SolutionWithMeta[],
   filters: SolutionFilters,
@@ -238,9 +281,15 @@ export function filterSolutions(
   const userLookup = new Map(users.map((u) => [u.id, u]))
 
   return solutions.filter((solution) => {
+    if (filters.participantId && !isParticipant(solution, filters.participantId)) return false
     if (!matchesSearch(solution, filters.search ?? '', userLookup)) return false
     if (!matchesBucket(solution, filters.bucket)) return false
-    if (filters.status && filters.status !== 'ALL' && solution.status !== filters.status) return false
+    // `status` accepts a list so a phase — a stage plus its approval gate — can
+    // be selected with one filter, and the rows then match the phase counts.
+    if (filters.status && filters.status !== 'ALL') {
+      const allowed = Array.isArray(filters.status) ? filters.status : [filters.status]
+      if (!allowed.includes(solution.status)) return false
+    }
     if (filters.priority && filters.priority !== 'ALL' && solution.priority !== filters.priority) {
       return false
     }
@@ -269,8 +318,11 @@ export function sortSolutions(
   solutions: SolutionWithMeta[],
   sortBy: SolutionFilters['sortBy'] = 'updatedAt',
   sortDir: SolutionFilters['sortDir'] = 'desc',
+  /** Needed only by the `assignee` key, which sorts by name rather than by id. */
+  users: User[] = [],
 ): SolutionWithMeta[] {
   const direction = sortDir === 'asc' ? 1 : -1
+  const nameFor = new Map(users.map((user) => [user.id, user.name]))
 
   return [...solutions].sort((a, b) => {
     let result = 0
@@ -283,6 +335,21 @@ export function sortSolutions(
         break
       case 'solutionNumber':
         result = a.solutionNumber.localeCompare(b.solutionNumber)
+        break
+      /*
+        By display name, not `assignedUserId`: sorting by an opaque id would
+        order the column by something the reader cannot see. An unresolved id
+        falls back to itself so the sort is still total.
+      */
+      case 'assignee':
+        result = (nameFor.get(a.assignedUserId) ?? a.assignedUserId).localeCompare(
+          nameFor.get(b.assignedUserId) ?? b.assignedUserId,
+        )
+        break
+      case 'raiser':
+        result = (nameFor.get(a.createdBy) ?? a.createdBy).localeCompare(
+          nameFor.get(b.createdBy) ?? b.createdBy,
+        )
         break
       default:
         result = a[sortBy].localeCompare(b[sortBy])
@@ -302,15 +369,44 @@ export function nextSolutionNumber(existing: Pick<Solution, 'solutionNumber'>[])
 }
 
 /** Sort helper for status counts on the dashboard. */
+/**
+ * Fold raw status counts into phase counts, so a solution parked at a gate is
+ * counted under the work it belongs to rather than vanishing from every stage.
+ * The five phases are exhaustive and non-overlapping, so these still sum to the
+ * total — which is what lets the tiles and the donut reconcile.
+ */
+export function foldToPhases(
+  byStatus: Record<SolutionStatus, number>,
+): Record<SolutionPhase, number> {
+  const counts = {} as Record<SolutionPhase, number>
+  for (const phase of SOLUTION_PHASES) {
+    /*
+      `?? 0` per status, because the argument is not always as complete as its
+      type claims: a cached stats payload written by an earlier build has no
+      count for a status added since, and `undefined + 0` is NaN — which then
+      spreads to every total derived from it and cannot be caught downstream,
+      since NaN is neither null nor undefined.
+    */
+    counts[phase] = PHASE_STATUSES[phase].reduce(
+      (sum, status) => sum + (byStatus[status] ?? 0),
+      0,
+    )
+  }
+  return counts
+}
+
 export function countByStatus(solutions: SolutionWithMeta[]): Record<SolutionStatus, number> {
   const counts = {
     DISCUSSION: 0,
     DISCUSSION_APPROVAL: 0,
     DEVELOPMENT: 0,
+    DEVELOPMENT_APPROVAL: 0,
     TESTING: 0,
     TESTING_APPROVAL: 0,
     EXECUTION: 0,
+    EXECUTION_APPROVAL: 0,
     COMPLETED: 0,
+    VOID: 0,
   } satisfies Record<SolutionStatus, number>
 
   for (const solution of solutions) counts[solution.status] += 1

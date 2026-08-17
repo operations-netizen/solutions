@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  Ban,
   CalendarClock,
   CheckCircle2,
   Flag,
@@ -7,8 +8,11 @@ import {
   Paperclip,
   PenLine,
   PlusCircle,
+  RotateCcw,
   Send,
   ShieldCheck,
+  Repeat,
+  UserMinus,
   UserPlus,
   Users,
   XCircle,
@@ -34,6 +38,8 @@ const ACTION_META: Record<HistoryAction, { icon: LucideIcon; className: string }
   DUE_DATE_CHANGED: { icon: CalendarClock, className: 'bg-amber-100 text-amber-700' },
   PRIORITY_CHANGED: { icon: Flag, className: 'bg-orange-100 text-orange-700' },
   APPROVER_ADDED: { icon: UserPlus, className: 'bg-violet-100 text-violet-700' },
+  APPROVER_REMOVED: { icon: UserMinus, className: 'bg-slate-100 text-slate-600' },
+  APPROVER_REPLACED: { icon: Repeat, className: 'bg-violet-100 text-violet-700' },
   APPROVAL_REQUESTED: { icon: Send, className: 'bg-amber-100 text-amber-700' },
   APPROVED: { icon: ShieldCheck, className: 'bg-emerald-100 text-emerald-700' },
   REJECTED: { icon: XCircle, className: 'bg-red-100 text-red-700' },
@@ -41,6 +47,8 @@ const ACTION_META: Record<HistoryAction, { icon: LucideIcon; className: string }
   COMMENT_ADDED: { icon: MessageSquare, className: 'bg-slate-100 text-slate-600' },
   ATTACHMENT_UPLOADED: { icon: Paperclip, className: 'bg-slate-100 text-slate-600' },
   COMPLETED: { icon: CheckCircle2, className: 'bg-emerald-100 text-emerald-700' },
+  VOIDED: { icon: Ban, className: 'bg-slate-200 text-slate-600' },
+  REVIVED: { icon: RotateCcw, className: 'bg-indigo-100 text-indigo-700' },
 }
 
 /** Complete audit trail for a solution. */

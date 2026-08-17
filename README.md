@@ -9,10 +9,22 @@ It is not a CRM: there are no contacts, leads, campaigns, or deals, and there
 never should be.
 
 ```
-Discussion → Discussion Approval → Development → Testing → Testing Approval → Execution → Completed
-                    │ reject ↓                                   │ reject ↓
-                 Discussion                                   Development
+Discussion → Discussion Approval → Development → Development Approval
+           → Testing → Testing Approval → Execution → Execution Approval → Completed
+
+reject: Discussion Approval → Discussion      Testing Approval   → Development
+        Development Approval → Development     Execution Approval → Execution
 ```
+
+**Every working stage ends in a gate, and a gate is never passed by hand.** That
+makes *Send for approval* the only advance in the application: clearing a gate is
+what moves a solution to the next stage, and clearing the last one is what
+completes it. No button pushes work into a stage its approvers have not signed
+off, and none marks a solution complete.
+
+A rejection returns the solution to the work that produced what was rejected —
+except at Testing Approval, which goes back to Development, because a fault found
+in testing is fixed by the developer rather than by testing it again.
 
 ## Running it
 
@@ -43,6 +55,36 @@ stores that path plus the metadata. So a snapshot write stays small, no file is
 bounded by the 16MB BSON document limit, and a download still works after a
 reload or from another machine. Deleting an attachment deletes its bytes, and the
 reset button drops the GridFS collections along with the rest.
+
+### Signing in
+
+On MongoDB the app has a real login. Seven accounts — one per role, plus a second
+approver so a gate has a real roster — are seeded into a `users` collection from
+`src/data/directory.json` with scrypt-hashed passwords (per-user salt,
+constant-time compare). `SEED_PASSWORD` in `.env` sets the initial password.
+`directory.json` is authoritative for **who exists**. On each start the server
+adds anyone missing, updates changed profile fields, and **removes any account not
+in the file — revoking its sessions immediately** — so dropping a person from the
+directory actually takes their login away. Passwords are the exception: the hash
+lives only in the database and is never rewritten, so nobody is reset to the seed.
+Expired sessions are swept at the same time.
+
+The login screen carries a one-click chip per account, built from that same file,
+so you can sign in as any role without typing. It is demo scaffolding: delete
+`DEMO_ACCOUNTS` / `DEMO_PASSWORD` in `src/App.tsx` and change `SEED_PASSWORD` when
+real accounts exist. `POST /api/auth/login` returns a session token, good for a
+week, and **every data route requires it**: `/api/snapshot`, `/api/reset`, and file
+uploads all answer `401` without one. Wrong password and unknown email return the
+same message, so the endpoint cannot be used to enumerate accounts.
+
+Your role decides what you can do — sign in as `rahul.verma@dws.com` and the
+"Add Solution" button is gone, because `DEVELOPER` has no `solution:create`. Sign
+out from the foot of the sidebar; it reloads the page deliberately, so no cached
+query outlives the session.
+
+On `localStorage` there is no login at all: the seeded HOBU is simply who you are,
+which keeps the zero-setup mode working. `AuthGate` skips itself when the auth
+service has no `signIn`.
 
 `src/services/db/index.ts` picks between them, and both expose the same surface —
 no service, hook, or component knows which is live. Data starts empty either way;
@@ -109,6 +151,16 @@ Rules the code actually follows:
 - No code assigns `solution.status` outside `solutionService`, and
   `solutionService` never assigns it without `assertTransition`.
 - No component checks `role === 'HOBU'`. It checks `can('solution:approve')`.
+- **Who can see a solution:** the people looped into it — the assignee, whoever
+  raised it, and its approvers — plus `solution:viewAll` (HOBU). Applied in the
+  read hooks as a filter, so lists, tab counts and dashboard tiles all show the
+  same set the detail page will open. It is a UI boundary, not a security one:
+  `GET /api/snapshot` returns everything to any signed-in session, so enforcing
+  this for real means filtering server-side.
+- **Raising** a solution is `solution:create`, held only by the HOBU.
+- Advancing the workflow is gated on **ownership**, not only permission: the
+  assignee may always move their own solution, and only `solution:override`
+  (HOBU) may move somebody else's.
 - No component builds a URL string. It calls `usePaths()`.
 
 ## The workflow

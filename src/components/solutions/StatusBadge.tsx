@@ -10,20 +10,24 @@ const BASE =
 
 interface StatusBadgeProps {
   status: SolutionStatus
-  /** Append the plain-language activity ("In progress", "Waiting"). */
-  showActivity?: boolean
   className?: string
 }
 
-/** The canonical way a workflow status is rendered. */
-export function StatusBadge({ status, showActivity, className }: StatusBadgeProps) {
+/**
+ * The canonical way a workflow status is rendered.
+ *
+ * The status alone — no "- Waiting" suffix. It duplicated the approval badge
+ * sitting next to it, which already says whether a decision is outstanding.
+ * `STATUS_META.activity` still drives the workflow tracker's step chips, where it
+ * is the only thing saying what is happening at that step.
+ */
+export function StatusBadge({ status, className }: StatusBadgeProps) {
   const meta = STATUS_META[status]
 
   return (
     <span className={cn(BASE, meta.badgeClass, className)}>
       <span className={cn('h-1.5 w-1.5 rounded-full', meta.dotClass)} aria-hidden />
       {meta.label}
-      {showActivity && <span className="opacity-70">- {meta.activity}</span>}
     </span>
   )
 }
@@ -46,6 +50,20 @@ export function PriorityBadge({ priority, className }: PriorityBadgeProps) {
 
 interface ApprovalStatusBadgeProps {
   status: ApprovalStatus
+  /**
+   * Whether anyone is on the approver roster.
+   *
+   * `NOT_REQUIRED` covers two different situations and only one of them means
+   * "no approval needed". A solution sitting in Discussion with approvers waiting
+   * has not reached its gate yet — labelling that "Not required" says approval is
+   * never coming, which is wrong.
+   */
+  hasApprovers?: boolean
+  /**
+   * Short labels for the table, which fits its container exactly — "Waiting for
+   * approval" would push the columns back into horizontal scrolling.
+   */
+  compact?: boolean
   className?: string
 }
 
@@ -56,14 +74,34 @@ const APPROVAL_ICON = {
   REJECTED: AlertTriangle,
 } as const
 
-export function ApprovalStatusBadge({ status, className }: ApprovalStatusBadgeProps) {
+const COMPACT_LABEL: Partial<Record<ApprovalStatus, string>> = {
+  PENDING: 'Pending',
+  NOT_REQUIRED: 'No decision',
+}
+
+export function ApprovalStatusBadge({
+  status,
+  hasApprovers = false,
+  compact = false,
+  className,
+}: ApprovalStatusBadgeProps) {
   const meta = APPROVAL_STATUS_META[status]
   const Icon = APPROVAL_ICON[status]
 
+  const upcoming = status === 'NOT_REQUIRED' && hasApprovers
+  const label = (compact && COMPACT_LABEL[status]) || meta.label
+
   return (
-    <span className={cn(BASE, meta.badgeClass, className)}>
+    <span
+      className={cn(BASE, meta.badgeClass, className)}
+      title={
+        upcoming
+          ? 'Approvers are on the roster; the decision is taken at the next gate.'
+          : undefined
+      }
+    >
       <Icon className="h-3 w-3" />
-      {meta.label}
+      {upcoming ? 'Not yet' : label}
     </span>
   )
 }

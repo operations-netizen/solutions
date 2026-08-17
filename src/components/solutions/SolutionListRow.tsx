@@ -1,8 +1,9 @@
 import {
   AlertTriangle,
+  Ban,
+  Code2,
   ChevronRight,
   Clock,
-  Code2,
   FlaskConical,
   MessagesSquare,
   Rocket,
@@ -25,10 +26,13 @@ const STATUS_ICON: Record<SolutionStatus, LucideIcon> = {
   DISCUSSION: MessagesSquare,
   DISCUSSION_APPROVAL: ShieldCheck,
   DEVELOPMENT: Code2,
+  DEVELOPMENT_APPROVAL: ShieldCheck,
   TESTING: FlaskConical,
   TESTING_APPROVAL: ShieldCheck,
   EXECUTION: Rocket,
+  EXECUTION_APPROVAL: ShieldCheck,
   COMPLETED: ShieldCheck,
+  VOID: Ban,
 }
 
 interface SolutionListRowProps {

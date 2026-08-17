@@ -96,9 +96,9 @@ export function PriorityStageHeatmap({ matrix, className }: PriorityStageHeatmap
                       peak={peak}
                       priority={priority}
                       stageLabel={stage.label}
-                      to={`${paths.solutions}?tab=${
-                        stage.key === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : stage.key
-                      }`}
+                      // Column keys are phase keys, which are exactly the tab
+                      // keys — and the tab selects the gate with the stage.
+                      to={`${paths.solutions}?tab=${stage.key}`}
                     />
                   ))}
 

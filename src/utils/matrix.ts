@@ -7,11 +7,18 @@
  */
 
 import { SOLUTION_PRIORITIES, type SolutionPriority, type SolutionWithMeta } from '@/types/solution'
+import { phaseOf } from './workflow'
 
-/** Columns of the matrix. The two approval gates are merged into one. */
+/**
+ * Columns of the matrix: the four open *phases*.
+ *
+ * There is no separate approval column. A gate belongs to the phase it is waiting
+ * inside, so a solution at Testing Approval lands under Testing — where the work
+ * actually is. A shared "Appr." column used to swallow both gates, which put
+ * testing work in the same cell as discussion work and disagreed with the tiles.
+ */
 export const MATRIX_STAGES = [
   { key: 'DISCUSSION', label: 'Discussion', short: 'Disc.' },
-  { key: 'PENDING_APPROVAL', label: 'Pending Approval', short: 'Appr.' },
   { key: 'DEVELOPMENT', label: 'Development', short: 'Dev.' },
   { key: 'TESTING', label: 'Testing', short: 'Test' },
   { key: 'EXECUTION', label: 'Execution', short: 'Exec.' },
@@ -32,31 +39,17 @@ export interface PriorityStageMatrix {
 function emptyRow(): Record<MatrixStageKey, number> {
   return {
     DISCUSSION: 0,
-    PENDING_APPROVAL: 0,
     DEVELOPMENT: 0,
     TESTING: 0,
     EXECUTION: 0,
   }
 }
 
-/** Which column a solution's status belongs to, or `null` if it is completed. */
+/** Which column a solution belongs to, or `null` if it is not open work. */
 function stageKeyFor(solution: SolutionWithMeta): MatrixStageKey | null {
-  switch (solution.status) {
-    case 'DISCUSSION':
-      return 'DISCUSSION'
-    case 'DISCUSSION_APPROVAL':
-    case 'TESTING_APPROVAL':
-      return 'PENDING_APPROVAL'
-    case 'DEVELOPMENT':
-      return 'DEVELOPMENT'
-    case 'TESTING':
-      return 'TESTING'
-    case 'EXECUTION':
-      return 'EXECUTION'
-    // Completed work is not load, so it has no column.
-    case 'COMPLETED':
-      return null
-  }
+  const phase = phaseOf(solution.status)
+  // Neither delivered nor called-off work is load, so neither gets a column.
+  return phase === 'COMPLETED' || phase === 'VOID' ? null : phase
 }
 
 export function computePriorityStageMatrix(solutions: SolutionWithMeta[]): PriorityStageMatrix {

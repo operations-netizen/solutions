@@ -21,6 +21,22 @@ export const PERMISSIONS = [
   'solution:delete',
   'solution:assign',
   'solution:transition',
+  /**
+   * Drive any solution's workflow, not only the ones you hold.
+   *
+   * Its own permission rather than reusing `solution:approve`, which every
+   * APPROVER has, or `solution:delete`, which happens to be HOBU-only today —
+   * both would be accidents of the table rather than a stated rule.
+   */
+  'solution:override',
+  /**
+   * See every solution, not only the ones you are part of.
+   *
+   * Without it a person sees a solution when they are looped into it — assigned,
+   * raised it, or on its approver roster. The overseer needs the whole register;
+   * nobody else has a reason to read work they are not part of.
+   */
+  'solution:viewAll',
   'solution:approve',
   'solution:comment',
   'solution:attach',

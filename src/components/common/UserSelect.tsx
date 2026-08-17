@@ -22,9 +22,13 @@ interface UserSelectProps {
  * Single-select person picker with type-ahead.
  *
  * A plain `<Select>` only jumps to first-letter matches, which stops being
- * usable the moment the directory outgrows one screen. This filters as you
- * type across name, job title, and team, so "qa" or "engineering" finds people
- * just as well as "neha" does.
+ * usable the moment the directory outgrows one screen. This filters as you type
+ * across name, sign-in id, job title, and team, so "qa" or "engineering" finds
+ * people just as well as "priya.nair" does.
+ *
+ * Each row carries the id the person signs in with, which is the one label that
+ * is unambiguous — two people can share a title or a team, and in a directory
+ * this size two can share a first name.
  */
 export function UserSelect({
   value,
@@ -51,7 +55,7 @@ export function UserSelect({
     if (terms.length === 0) return available
     // Every term must appear somewhere, so "neha qa" narrows rather than widens.
     return available.filter((user) => {
-      const haystack = `${user.name} ${user.title} ${user.team}`.toLowerCase()
+      const haystack = `${user.name} ${user.email} ${user.title} ${user.team}`.toLowerCase()
       return terms.every((term) => haystack.includes(term))
     })
   }, [available, query])
@@ -139,7 +143,7 @@ export function UserSelect({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search by name, title, or team"
+            placeholder="Search by name, id, or team"
             aria-label="Search people"
             className="h-10 border-0 pl-9 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           />
@@ -175,8 +179,8 @@ export function UserSelect({
                   <UserAvatar user={user} size="sm" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{user.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {user.title} · {user.team}
+                    <span className="block truncate font-mono text-xs text-muted-foreground">
+                      {user.email}
                     </span>
                   </span>
                   {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" />}

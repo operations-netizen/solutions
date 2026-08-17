@@ -74,6 +74,22 @@
   }
 }
 
+@layer base {
+  /*
+   * Chrome paints autofilled inputs with its own pale blue and ignores
+   * `background-color`. An inset shadow the size of the field is the only way to
+   * cover it, so a field the browser fills anyway still matches the design.
+   */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: hsl(var(--foreground));
+    -webkit-box-shadow: 0 0 0 1000px hsl(var(--card)) inset;
+    caret-color: hsl(var(--foreground));
+    transition: background-color 9999s ease-out 0s;
+  }
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

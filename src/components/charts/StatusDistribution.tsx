@@ -3,13 +3,17 @@ import { useState } from 'react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { SolutionStatus } from '@/types/solution'
+import { foldToPhases } from '@/utils/solution'
 import { STATUS_META } from '@/utils/workflow'
 
 /**
- * One class in the part-to-whole. The two approval gates are merged into a
- * single "Pending Approval" class so the six classes stay mutually exclusive
- * and actually sum to the total — an "Overdue" slice would double-count every
- * solution that is also in Development.
+ * One class in the part-to-whole.
+ *
+ * The classes are the five workflow *phases*, so each approval gate is counted
+ * inside the phase it is waiting in — a solution at Discussion Approval is still
+ * discussion work. That keeps the classes mutually exclusive and summing to the
+ * total, which a separate "Pending Approval" slice could not do once gates were
+ * folded in: it would double-count. Pending approval is a flag, shown as a tile.
  */
 export interface DistributionClass {
   key: string
@@ -19,41 +23,37 @@ export interface DistributionClass {
 }
 
 export function buildStatusClasses(byStatus: Record<SolutionStatus, number>): DistributionClass[] {
+  const byPhase = foldToPhases(byStatus)
+
   return [
     {
       key: 'DISCUSSION',
       label: STATUS_META.DISCUSSION.label,
-      count: byStatus.DISCUSSION,
+      count: byPhase.DISCUSSION,
       color: STATUS_META.DISCUSSION.chartColor,
-    },
-    {
-      key: 'PENDING_APPROVAL',
-      label: 'Pending Approval',
-      count: byStatus.DISCUSSION_APPROVAL + byStatus.TESTING_APPROVAL,
-      color: STATUS_META.DISCUSSION_APPROVAL.chartColor,
     },
     {
       key: 'DEVELOPMENT',
       label: STATUS_META.DEVELOPMENT.label,
-      count: byStatus.DEVELOPMENT,
+      count: byPhase.DEVELOPMENT,
       color: STATUS_META.DEVELOPMENT.chartColor,
     },
     {
       key: 'TESTING',
       label: STATUS_META.TESTING.label,
-      count: byStatus.TESTING,
+      count: byPhase.TESTING,
       color: STATUS_META.TESTING.chartColor,
     },
     {
       key: 'EXECUTION',
       label: STATUS_META.EXECUTION.label,
-      count: byStatus.EXECUTION,
+      count: byPhase.EXECUTION,
       color: STATUS_META.EXECUTION.chartColor,
     },
     {
       key: 'COMPLETED',
       label: STATUS_META.COMPLETED.label,
-      count: byStatus.COMPLETED,
+      count: byPhase.COMPLETED,
       color: STATUS_META.COMPLETED.chartColor,
     },
   ]
@@ -78,7 +78,7 @@ interface StatusDistributionProps {
 export function StatusDistribution({ classes, className }: StatusDistributionProps) {
   const [hovered, setHovered] = useState<string | null>(null)
 
-  const total = classes.reduce((sum, item) => sum + item.count, 0)
+  const total = classes.reduce((sum, item) => sum + (Number.isFinite(item.count) ? item.count : 0), 0)
   const present = classes.filter((item) => item.count > 0)
 
   const share = (count: number) => (total === 0 ? 0 : (count / total) * 100)

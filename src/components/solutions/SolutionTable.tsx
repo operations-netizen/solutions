@@ -106,13 +106,20 @@ export function SolutionTable({
         <TableRow className="hover:bg-transparent">
           <SortableHead label="ID" sortKey="solutionNumber" />
           <SortableHead label="Solution" sortKey="title" />
-          <TableHead>Assigned</TableHead>
+          <SortableHead label="Assigned to" sortKey="assignee" />
+          {/*
+            Who raised it. Second to go when width is tight — it answers "who do I
+            go back to", which matters less in a list than in the solution itself.
+          */}
+          <SortableHead label="Assigned by" sortKey="raiser" className="hidden xl:table-cell" />
           <SortableHead label="Priority" sortKey="priority" />
           <SortableHead label="Due date" sortKey="dueDate" />
+          {/* Centred: the badge is a chip of variable width, so left-aligning it
+              makes each row start at a different place down the column. */}
           {variant === 'completed' ? (
-            <TableHead>Completed</TableHead>
+            <TableHead className="text-center">Completed</TableHead>
           ) : (
-            <TableHead>Status</TableHead>
+            <TableHead className="text-center">Stage</TableHead>
           )}
           <TableHead>{variant === 'completed' ? 'Outcome' : 'Approval'}</TableHead>
           {/*
@@ -126,13 +133,16 @@ export function SolutionTable({
             sortKey="updatedAt"
             className="hidden 2xl:table-cell"
           />
-          <TableHead className="w-8" />
+          {/* Decorative, so it is the first thing to go: at exactly 1280px the two
+              people columns need its 32px more than the row needs a chevron. */}
+          <TableHead className="hidden w-8 2xl:table-cell" />
         </TableRow>
       </TableHeader>
 
       <TableBody>
         {solutions.map((solution) => {
           const assignee = getUser(solution.assignedUserId)
+          const raiser = getUser(solution.createdBy)
           const completedLate =
             solution.completedAt !== null && solution.completedAt > solution.dueDate
 
@@ -146,7 +156,9 @@ export function SolutionTable({
                 {solution.solutionNumber}
               </TableCell>
 
-              <TableCell className="max-w-[22rem]">
+              {/* Narrower until there is room for both people columns: the title
+                  truncates, which costs less than a horizontal scrollbar. */}
+              <TableCell className="max-w-[16rem] 2xl:max-w-[22rem]">
                 <p className="truncate font-medium text-foreground">{solution.title}</p>
                 {variant === 'default' && (
                   <div className="mt-1.5 flex items-center gap-2">
@@ -166,6 +178,13 @@ export function SolutionTable({
                 <UserCell user={assignee} subtitle={solution.assignedTeam || assignee?.team} />
               </TableCell>
 
+              {/* Name only, no avatar: it keeps the column narrow enough to fit
+                  beside "Assigned to", and the plainer treatment reads as the
+                  secondary of the two people on the row. */}
+              <TableCell className="hidden whitespace-nowrap text-sm text-muted-foreground xl:table-cell">
+                {raiser?.name ?? solution.createdBy}
+              </TableCell>
+
               <TableCell>
                 <PriorityBadge priority={solution.priority} />
               </TableCell>
@@ -183,11 +202,11 @@ export function SolutionTable({
               </TableCell>
 
               {variant === 'completed' ? (
-                <TableCell className="whitespace-nowrap text-sm">
+                <TableCell className="whitespace-nowrap text-center text-sm">
                   {formatDate(solution.completedAt)}
                 </TableCell>
               ) : (
-                <TableCell>
+                <TableCell className="text-center">
                   <StatusBadge status={solution.status} />
                 </TableCell>
               )}
@@ -205,7 +224,11 @@ export function SolutionTable({
                     {completedLate ? 'Closed late' : 'On time'}
                   </span>
                 ) : (
-                  <ApprovalStatusBadge status={solution.approvalStatus} />
+                  <ApprovalStatusBadge
+                    status={solution.approvalStatus}
+                    hasApprovers={solution.approvals.length > 0}
+                    compact
+                  />
                 )}
               </TableCell>
 
@@ -218,7 +241,7 @@ export function SolutionTable({
                 cost a 64px column. It is a hover affordance now: the whole row is
                 the click target anyway.
               */}
-              <TableCell className="w-8 px-2">
+              <TableCell className="hidden w-8 px-2 2xl:table-cell">
                 <ChevronRight
                   className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
                   aria-hidden

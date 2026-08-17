@@ -1,0 +1,86 @@
+{
+  "users": [
+    {
+      "id": "u-hobu",
+      "name": "Tarun Gogia",
+      "email": "tarun.gogia@dws.com",
+      "role": "HOBU",
+      "title": "Head of Business Unit",
+      "team": "Business Unit"
+    },
+    {
+      "id": "u-priya",
+      "name": "Priya Nair",
+      "email": "priya.nair@dws.com",
+      "role": "MANAGER",
+      "title": "Product Manager",
+      "team": "Product"
+    },
+    {
+      "id": "u-rahul",
+      "name": "Rahul Verma",
+      "email": "rahul.verma@dws.com",
+      "role": "DEVELOPER",
+      "title": "Senior Developer",
+      "team": "Engineering"
+    },
+    {
+      "id": "u-sarah",
+      "name": "Sarah Smith",
+      "email": "sarah.smith@dws.com",
+      "role": "QA",
+      "title": "QA Lead",
+      "team": "Quality Assurance"
+    },
+    {
+      "id": "u-john",
+      "name": "John Doe",
+      "email": "john.doe@dws.com",
+      "role": "APPROVER",
+      "title": "Director of Operations",
+      "team": "Leadership"
+    },
+    {
+      "id": "u-mark",
+      "name": "Mark Wilson",
+      "email": "mark.wilson@dws.com",
+      "role": "APPROVER",
+      "title": "Finance Controller",
+      "team": "Finance"
+    },
+    {
+      "id": "u-meera",
+      "name": "Meera Iyer",
+      "email": "meera.iyer@dws.com",
+      "role": "VIEWER",
+      "title": "Business Analyst",
+      "team": "Business Unit"
+    }
+  ],
+  "teams": [
+    {
+      "id": "t-business",
+      "name": "Business Unit"
+    },
+    {
+      "id": "t-engineering",
+      "name": "Engineering"
+    },
+    {
+      "id": "t-qa",
+      "name": "Quality Assurance"
+    },
+    {
+      "id": "t-leadership",
+      "name": "Leadership"
+    },
+    {
+      "id": "t-product",
+      "name": "Product"
+    },
+    {
+      "id": "t-finance",
+      "name": "Finance"
+    }
+  ]
+}
