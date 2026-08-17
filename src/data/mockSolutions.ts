@@ -54,7 +54,7 @@ interface SeedComment {
   hoursAgo: number
 }
 
-interface SolutionSeed {
+export interface SolutionSeed {
   title: string
   problem: string
   proposedSolution: string
@@ -342,10 +342,16 @@ function buildSolution(seed: SolutionSeed, index: number, out: Builder): Solutio
   }
 }
 
-/** Build a complete, internally consistent dataset. */
-export function createSeedSnapshot(): DatabaseSnapshot {
+/**
+ * Build a complete, internally consistent dataset from a list of seeds.
+ *
+ * Exported so a demo dataset can be built without adding it to `SEEDS`, which is
+ * deliberately empty: a fresh install starts with nothing, and demo data is
+ * something you ask for.
+ */
+export function buildSnapshotFrom(seeds: SolutionSeed[]): DatabaseSnapshot {
   const out: Builder = { history: [], approvals: [], comments: [], attachments: [] }
-  const solutions = SEEDS.map((seed, index) => buildSolution(seed, index, out))
+  const solutions = seeds.map((seed, index) => buildSolution(seed, index, out))
 
   return {
     solutions,
@@ -354,4 +360,9 @@ export function createSeedSnapshot(): DatabaseSnapshot {
     history: out.history,
     attachments: out.attachments,
   }
+}
+
+/** Build a complete, internally consistent dataset. */
+export function createSeedSnapshot(): DatabaseSnapshot {
+  return buildSnapshotFrom(SEEDS)
 }

@@ -26,6 +26,35 @@ A rejection returns the solution to the work that produced what was rejected —
 except at Testing Approval, which goes back to Development, because a fault found
 in testing is fixed by the developer rather than by testing it again.
 
+## Showing it to someone
+
+Nothing needs hosting to demo it. Two processes, one browser:
+
+```bash
+npm run dev:api     # the API + MongoDB
+npm run dev         # the app, http://localhost:5173
+npm run seed:demo   # five solutions spread across the workflow
+```
+
+`seed:demo` appends, renumbering its rows so they continue after whatever is
+already there, and prints what it added. `--reset` replaces the register instead.
+Undo it with **Erase all data** in the sidebar, as the HOBU.
+
+A walkthrough that shows the whole model in about three minutes:
+
+1. **Sign in as Tarun Gogia** (Head of Business Unit). The dashboard is the
+   overview: where every solution sits, and what is waiting on a decision.
+2. **Open "Quote approval takes four days"** (SOL-002). It is at the Discussion
+   gate with one of two approvers signed off. The Approvers tab shows the roster,
+   which gate is open, and which are still ahead.
+3. **Sign out, sign in as John Doe.** Same solution: he is on the roster, so he
+   gets **Approve** and **Reject** on his own row and nothing on anybody else's.
+   Approving it moves the solution to Development by itself — no button does that.
+4. **Sign in as Priya Nair** (Manager). Her register is nearly empty: she is not
+   looped into these solutions, and *Add Solution* is not hers either.
+5. Back as Tarun: **Not feasible** on any solution, with a reason, then **Revoke**
+   with a new due date. Voided work leaves the pipeline without losing its history.
+
 ## Deploying it
 
 Two pieces, two hosts: a static bundle and a long-lived API. The API is not
