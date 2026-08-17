@@ -83,7 +83,37 @@ async function connect() {
   }
 }
 
-const client = await connect()
+/**
+ * Turn a connection failure into an instruction.
+ *
+ * On a hosted platform this is the only thing anybody sees: the process dies at
+ * boot and the dashboard reports "unhealthy". A driver stack trace does not
+ * mention that the cause is usually one of two settings.
+ */
+function explain(error) {
+  const message = String(error?.message ?? error)
+  if (/bad auth|Authentication failed/i.test(message)) {
+    return 'MongoDB rejected the credentials. Check the user and password in MONGODB_URI (a password with @ : / ? # needs percent-encoding).'
+  }
+  if (/IP that isn't whitelisted|not allowed to access|ETIMEDOUT|ServerSelectionTimeout|timed out/i.test(message)) {
+    return "MongoDB was unreachable. Atlas only accepts connections from allowlisted addresses, and a host without a static outbound IP needs 0.0.0.0/0 on the cluster's IP access list."
+  }
+  if (/querySrv|EAI_AGAIN|ENOTFOUND/i.test(message)) {
+    return 'The cluster hostname did not resolve. Check the host in MONGODB_URI, or set MONGODB_DNS_SERVERS if this network blocks SRV lookups.'
+  }
+  return null
+}
+
+let client
+try {
+  client = await connect()
+} catch (error) {
+  console.error('Could not connect to MongoDB.')
+  const hint = explain(error)
+  if (hint) console.error(hint)
+  console.error(error?.message ?? error)
+  process.exit(1)
+}
 const database = client.db(MONGODB_DB)
 /**
  * File contents live in GridFS, not in the snapshot. An attachment row carries
@@ -295,6 +325,15 @@ app.use(
 // File bytes go to GridFS via /api/files, never through this body — but a whole
 // snapshot of solutions, history and comments still outgrows the 100kb default.
 app.use(express.json({ limit: '8mb' }))
+
+/*
+  Platforms default their HTTP health check to `/`, and a 404 there reads as a dead
+  service. Answering it also gives a human opening the API's URL something other
+  than "Cannot GET /".
+*/
+app.get('/', (_req, res) => {
+  res.json({ service: 'hobu-solutions-api', health: '/api/health' })
+})
 
 app.get('/api/health', async (_req, res) => {
   try {
