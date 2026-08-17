@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+node_modules
+dist
+src
+!src/data/directory.json
+public
+scripts
+*.md

@@ -28,9 +28,25 @@ const {
   MONGODB_URI,
   MONGODB_DB = 'hobu_solutions',
   API_PORT = 4000,
+  /**
+   * Set by the platform, not by us.
+   *
+   * Koyeb, Render, Fly and friends inject `PORT` and health-check that exact port;
+   * a service listening anywhere else looks dead to them and is killed. `API_PORT`
+   * stays as the local default so nothing changes for `npm run dev:api`.
+   */
+  PORT,
   /** Password given to every seeded user on first run. Change it in .env. */
   SEED_PASSWORD = 'hobu-demo-2026',
+  /**
+   * Comma-separated origins allowed to call this API — the deployed front end.
+   * Unset means any origin, which is right for local development and wrong for a
+   * public deployment.
+   */
+  ALLOWED_ORIGINS,
 } = process.env
+
+const LISTEN_PORT = Number(PORT ?? API_PORT)
 
 if (!MONGODB_URI) {
   console.error('MONGODB_URI is missing. Copy .env.example to .env and fill it in.')
@@ -247,7 +263,35 @@ async function readSnapshot() {
 }
 
 const app = express()
-app.use(cors())
+/*
+  Auth rides an `Authorization` header rather than cookies, so a wildcard origin
+  does not expose an authenticated session to another site the way it would with
+  credentials. It still tells any page it may read responses, so a deployment
+  names its front end explicitly.
+*/
+const allowedOrigins = (ALLOWED_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
+app.use(
+  cors(
+    allowedOrigins.length === 0
+      ? undefined
+      : {
+          origin(origin, callback) {
+            // No Origin header at all: curl, health checks, same-origin requests.
+            if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
+            /*
+              Declined by omitting the header, not by throwing. Throwing turns a
+              disallowed origin into a 500 with a stack trace in the logs, when the
+              browser was going to block the response on the missing header anyway.
+            */
+            callback(null, false)
+          },
+        },
+  ),
+)
 // File bytes go to GridFS via /api/files, never through this body — but a whole
 // snapshot of solutions, history and comments still outgrows the 100kb default.
 app.use(express.json({ limit: '8mb' }))
@@ -495,8 +539,15 @@ app.post('/api/reset', requireSession, async (_req, res) => {
   }
 })
 
-app.listen(Number(API_PORT), () => {
-  console.log(`API listening on http://localhost:${API_PORT}`)
+// `0.0.0.0` explicitly: a container that binds only to loopback is unreachable
+// from outside itself, which reads as a failed deploy rather than a bound port.
+app.listen(LISTEN_PORT, '0.0.0.0', () => {
+  console.log(`API listening on port ${LISTEN_PORT}`)
+  console.log(
+    allowedOrigins.length === 0
+      ? 'CORS: any origin (set ALLOWED_ORIGINS before deploying publicly)'
+      : `CORS: ${allowedOrigins.join(', ')}`,
+  )
 })
 
 for (const signal of ['SIGINT', 'SIGTERM']) {

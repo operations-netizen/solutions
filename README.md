@@ -26,6 +26,44 @@ A rejection returns the solution to the work that produced what was rejected —
 except at Testing Approval, which goes back to Development, because a fault found
 in testing is fixed by the developer rather than by testing it again.
 
+## Deploying it
+
+Two pieces, two hosts: a static bundle and a long-lived API. The API is not
+serverless-shaped — it opens one MongoDB connection and one GridFS bucket at boot
+and keeps them — so it wants a platform that runs a process, not a function.
+
+**API on Koyeb** (or Render, Fly, Railway — anything that runs a container):
+
+1. Deploy from this repo using the `Dockerfile`. It installs production
+   dependencies, copies `server/` plus `src/data/directory.json`, and runs
+   `node server/index.mjs`.
+2. Environment: `MONGODB_URI`, `MONGODB_DB`, `SEED_PASSWORD`, and
+   `ALLOWED_ORIGINS` set to the front end's URL. `PORT` is injected by the
+   platform and takes precedence over `API_PORT`.
+3. Health check: `GET /api/health` — returns `{ ok, database, version }` without a
+   session.
+4. Atlas: allow the platform's egress. Koyeb has no static outbound IP on the free
+   plan, so this means `0.0.0.0/0` on the IP access list, and therefore a strong
+   database password rather than a demo one.
+
+**Front end on Vercel:**
+
+1. `vercel.json` is already here: it builds with `npm run build`, serves `dist`,
+   and rewrites every non-asset path to `index.html` so a refresh on
+   `/solutions/:id` does not 404.
+2. Set `VITE_API_URL` to the API's public URL. Leave it unset and the app runs
+   entirely on `localStorage` instead, which is a usable demo with no database.
+3. `VITE_*` variables are inlined into the browser bundle. Never put the
+   connection string in one.
+
+**Before a public URL exists**, two things in this repo are demo conveniences and
+not safe defaults:
+
+- The sign-in screen ships a hardcoded demo password (`src/App.tsx`) and fills it
+  on a click, so anyone with the URL can sign in as the HOBU.
+- Solution visibility is enforced in the read hooks, not on the server:
+  `GET /api/snapshot` returns everything to any signed-in session.
+
 ## Running it
 
 ```bash
