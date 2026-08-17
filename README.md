@@ -100,10 +100,13 @@ and keeps them — so it wants a platform that runs a process, not a function.
 1. `vercel.json` is already here: it builds with `npm run build`, serves `dist`,
    and rewrites every non-asset path to `index.html` so a refresh on
    `/solutions/:id` does not 404.
-2. Set `VITE_API_URL` to the API's public URL.
-3. Or deploy the demo on its own: set `VITE_DEMO_MODE=on`, leave `VITE_API_URL`
-   unset, and the site needs no API and no database at all. See *Demo mode* above
-   for what that costs.
+2. `vercel.json` already sets `VITE_DEMO_MODE=on` for the build, so a deploy with
+   nothing configured is a working demo — no dashboard step, no database. It is
+   committed rather than left to a dashboard because it is not a secret: every
+   `VITE_*` value ends up in the bundle by definition.
+3. To point the same site at a real API instead, set `VITE_API_URL` in the Vercel
+   project. Demo mode turns itself off whenever that is present, so there is
+   nothing to undo — see *Demo mode* above.
 3. `VITE_*` variables are inlined into the browser bundle. Never put the
    connection string in one.
 

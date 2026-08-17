@@ -2,6 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "build": {
+    "env": {
+      "VITE_DEMO_MODE": "on"
+    }
+  },
   "rewrites": [
     {
       "source": "/((?!assets/).*)",
