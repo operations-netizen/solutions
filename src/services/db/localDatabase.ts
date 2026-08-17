@@ -125,10 +125,16 @@ export const db = {
     return clone(result)
   },
 
-  /** Drop all local data and reseed. Exposed for the "reset demo data" action. */
+  /**
+   * Drop everything and start from the seed this build was born with.
+   *
+   * The same source `load` uses, deliberately: a demo build that reset to the
+   * empty seed would leave the visitor with a blank app and no way back short of
+   * clearing site data, which is a dead end rather than a reset.
+   */
   async reset(): Promise<void> {
     await delay(0)
-    snapshot = createSeedSnapshot()
+    snapshot = DEMO_MODE ? createDemoSnapshot() : createSeedSnapshot()
     save(snapshot)
   },
 }
