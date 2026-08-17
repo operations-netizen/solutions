@@ -10,6 +10,8 @@
  * and get away with it locally only to break against a real API.
  */
 
+import { createDemoSnapshot } from '@/data/demoSeed'
+import { DEMO_MODE } from '@/services/demoMode'
 import { createSeedSnapshot, type DatabaseSnapshot } from '@/data/mockSolutions'
 
 /**
@@ -17,8 +19,12 @@ import { createSeedSnapshot, type DatabaseSnapshot } from '@/data/mockSolutions'
  * that already ran the seeded build would keep serving those 25 demo solutions
  * out of `localStorage` forever, since a stored payload always wins over the
  * seed.
+ *
+ * A demo build keeps its own key. Otherwise a browser that had opened the clean
+ * build would hold an empty snapshot, and an empty stored payload is a legitimate
+ * state that wins over the seed — so the demo would open with nothing in it.
  */
-const STORAGE_KEY = 'hobu.solutions.db.v2'
+const STORAGE_KEY = DEMO_MODE ? 'hobu.solutions.demo.v1' : 'hobu.solutions.db.v2'
 
 /** Small artificial delay so loading states are real during development. */
 const LATENCY_MS = 220
@@ -59,7 +65,11 @@ function load(): DatabaseSnapshot {
     // Corrupt payload — fall through and reseed rather than dying on boot.
   }
 
-  const seeded = createSeedSnapshot()
+  /*
+    A demo build starts populated; a real one starts empty. Both go through the
+    same builder, so the demo rows are as internally consistent as any other.
+  */
+  const seeded = DEMO_MODE ? createDemoSnapshot() : createSeedSnapshot()
   save(seeded)
   return seeded
 }

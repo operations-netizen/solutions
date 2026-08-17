@@ -40,20 +40,40 @@ npm run seed:demo   # five solutions spread across the workflow
 already there, and prints what it added. `--reset` replaces the register instead.
 Undo it with **Erase all data** in the sidebar, as the HOBU.
 
-A walkthrough that shows the whole model in about three minutes:
+A walkthrough that shows the whole model in about three minutes. It names
+solutions rather than numbers, because numbering continues from whatever the
+register already held:
 
 1. **Sign in as Tarun Gogia** (Head of Business Unit). The dashboard is the
    overview: where every solution sits, and what is waiting on a decision.
-2. **Open "Quote approval takes four days"** (SOL-002). It is at the Discussion
-   gate with one of two approvers signed off. The Approvers tab shows the roster,
-   which gate is open, and which are still ahead.
-3. **Sign out, sign in as John Doe.** Same solution: he is on the roster, so he
-   gets **Approve** and **Reject** on his own row and nothing on anybody else's.
-   Approving it moves the solution to Development by itself — no button does that.
+2. **Open "Quote approval takes four days"** — at the Discussion gate, with John
+   Doe signed off and Mark Wilson still to decide. The Approvers tab shows the one
+   roster, which gate is open, and which are still ahead.
+3. **Sign out, sign in as Mark Wilson.** Same solution: **Approve** and **Reject**
+   appear on his row and on nobody else's. Approving moves the solution to
+   Development by itself — no button does that.
 4. **Sign in as Priya Nair** (Manager). Her register is nearly empty: she is not
    looped into these solutions, and *Add Solution* is not hers either.
 5. Back as Tarun: **Not feasible** on any solution, with a reason, then **Revoke**
    with a new due date. Voided work leaves the pipeline without losing its history.
+
+"Duplicate contacts on import" carries a rejection in its Activity tab, and
+"Territory rules are a spreadsheet" is overdue, if either comes up.
+
+### Demo mode: the same demo with nothing behind it
+
+`VITE_DEMO_MODE=on`, with `VITE_API_URL` unset, makes the build self-contained:
+the store seeds itself from the demo dataset and sign-in is checked against the
+directory in the bundle. The sign-in screen, the accounts, the gates and the
+per-row approval authority all behave as they do against the API — verified by
+signing in as Mark Wilson in a demo build and watching his approval move a
+solution to Development.
+
+What it is not: shared. Each visitor gets their own copy in their own browser, so
+nobody sees anybody else's work, and clearing site data resets it. Attachments
+cannot be stored either — there is no GridFS. Demo mode is ignored whenever
+`VITE_API_URL` is set, so a real deployment cannot serve seeded rows or a demo
+password by accident.
 
 ## Deploying it
 
@@ -80,8 +100,10 @@ and keeps them — so it wants a platform that runs a process, not a function.
 1. `vercel.json` is already here: it builds with `npm run build`, serves `dist`,
    and rewrites every non-asset path to `index.html` so a refresh on
    `/solutions/:id` does not 404.
-2. Set `VITE_API_URL` to the API's public URL. Leave it unset and the app runs
-   entirely on `localStorage` instead, which is a usable demo with no database.
+2. Set `VITE_API_URL` to the API's public URL.
+3. Or deploy the demo on its own: set `VITE_DEMO_MODE=on`, leave `VITE_API_URL`
+   unset, and the site needs no API and no database at all. See *Demo mode* above
+   for what that costs.
 3. `VITE_*` variables are inlined into the browser bundle. Never put the
    connection string in one.
 
